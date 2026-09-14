@@ -41,8 +41,7 @@ try {
   die(`could not parse package: ${e.message}`);
 }
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const hasherDir = opt("hasher", path.join(here, "..", "install", "hasher"));
+const hasherDir = opt("hasher");
 
 const res = await auditDisclosure(privatePack, proofPackage, hasherDir);
 

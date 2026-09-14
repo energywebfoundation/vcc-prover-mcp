@@ -42,8 +42,7 @@ try {
   die(`could not parse the recipe: ${e.message}`);
 }
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const installDir = opt("install", path.join(here, "..", "install"));
+const installDir = opt("install");
 const saltDir = opt("salt-dir", path.join(os.homedir(), ".vcc", "private"));
 const packageDir = opt("package-dir", path.join(os.homedir(), ".vcc", "packages"));
 

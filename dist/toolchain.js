@@ -91,6 +91,8 @@ export async function toolchainVersions() {
  * Initializes the standalone Poseidon2 hasher Noir project from bundled artifact if needed.
  */
 export function ensureHasherProject(hasherDir) {
+    if (!hasherDir)
+        return;
     const targetJson = path.join(hasherDir, "target", "hasher.json");
     if (!fs.existsSync(targetJson)) {
         fs.mkdirSync(path.join(hasherDir, "target"), { recursive: true });
@@ -120,9 +122,12 @@ function getCachedCircuit(circuitJsonPath) {
  * Computes Poseidon2(value, salt) over BN254 using NoirJS in-memory ACVM execution.
  */
 export async function poseidon2(hasherDir, value, salt, _tag = "h") {
-    ensureHasherProject(hasherDir);
-    let hasherJsonPath = path.join(hasherDir, "target", "hasher.json");
-    if (!fs.existsSync(hasherJsonPath)) {
+    let hasherJsonPath = "";
+    if (hasherDir) {
+        ensureHasherProject(hasherDir);
+        hasherJsonPath = path.join(hasherDir, "target", "hasher.json");
+    }
+    if (!hasherJsonPath || !fs.existsSync(hasherJsonPath)) {
         const possibleBundled = [
             path.join(__dirname, "..", "artifacts", "hasher.json"),
             path.join(__dirname, "artifacts", "hasher.json"),
@@ -135,7 +140,7 @@ export async function poseidon2(hasherDir, value, salt, _tag = "h") {
             }
         }
     }
-    if (!fs.existsSync(hasherJsonPath)) {
+    if (!hasherJsonPath || !fs.existsSync(hasherJsonPath)) {
         return { ok: false, reason: `Hasher circuit artifact not found at ${hasherJsonPath}` };
     }
     try {
@@ -168,7 +173,7 @@ export async function poseidon2(hasherDir, value, salt, _tag = "h") {
  * then generates the UltraHonk proof with bb.js.
  * Supports both on-disk circuit project and in-memory circuit JSON.
  */
-export async function proveCircuitWithNoirJs(circuitDir, circuitName, inputsMap, tag, circuitSource) {
+export async function proveCircuitWithNoirJs(circuitDir, circuitName = "", inputsMap, tag, circuitSource) {
     const name = `vcc_${tag}`;
     let tmpCircuitPath = null;
     let circuitJsonPath;
@@ -185,6 +190,9 @@ export async function proveCircuitWithNoirJs(circuitDir, circuitName, inputsMap,
         proofPath = path.join(os.tmpdir(), `${name}.proof`);
     }
     else {
+        if (!circuitDir) {
+            return { ok: false, reason: "circuitDir is required when circuitSource is not provided" };
+        }
         execCwd = circuitDir;
         circuitJsonPath = path.join(circuitDir, "target", `${circuitName}.json`);
         witnessPath = path.join(circuitDir, "target", `${name}.gz`);
@@ -232,7 +240,7 @@ export async function proveCircuitWithNoirJs(circuitDir, circuitName, inputsMap,
 /**
  * Generates UltraHonk proof using NoirJS for witness and bb.js for proving.
  */
-export async function proveCircuit(circuitDir, circuitName, inputsMap, tag, circuitSource) {
+export async function proveCircuit(circuitDir, circuitName = "", inputsMap, tag, circuitSource) {
     return proveCircuitWithNoirJs(circuitDir, circuitName, inputsMap, tag, circuitSource);
 }
 /**
