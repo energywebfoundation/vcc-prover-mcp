@@ -1,0 +1,241 @@
+/**
+ * Native TypeScript MCP Server for VCC Prover TS.
+ *
+ * Implements standard JSON-RPC 2.0 over stdio for AI agent integration.
+ */
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import process from "node:process";
+import readline from "node:readline";
+import { withRedactedProof } from "./proof-package.js";
+import { prove } from "./prove.js";
+import { BB_JS_BIN, toolchainVersions } from "./toolchain.js";
+import { verify } from "./verify.js";
+const DEFAULT_INSTALL_DIR = process.env.VCC_INSTALL_DIR || path.join(os.homedir(), ".vcc", "install");
+const DEFAULT_SALT_DIR = process.env.VCC_SALT_DIR || path.join(os.homedir(), ".vcc", "private");
+const DEFAULT_PACKAGE_DIR = process.env.VCC_PACKAGE_DIR || path.join(os.homedir(), ".vcc", "packages");
+const PROTOCOL_VERSION = "2025-06-18";
+const TOOLS = [
+    {
+        name: "prove",
+        description: "Produce a zero-knowledge proof package from private activity data using bb.js and Noir. Writes the full package and private disclosures to disk. Returns the path to the package; does not leak salts in tool response.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                recipe: {
+                    type: "object",
+                    description: "The recipe object exactly as get_workspace_instructions returned it."
+                },
+                recipe_path: {
+                    type: "string",
+                    description: "File path to recipe.json if recipe object is not provided directly."
+                },
+                inputs: {
+                    type: "object",
+                    description: "The private activity values as decimal strings, keyed by parameter name or meaning.",
+                    additionalProperties: { type: "string" }
+                },
+                include_proof: {
+                    type: "boolean",
+                    description: "Include raw base64 proof in response (default: false)."
+                }
+            },
+            required: ["inputs"],
+            additionalProperties: false
+        }
+    },
+    {
+        name: "verify",
+        description: "Check an UltraHonk proof package locally against the verifying key using bb.js without network access.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                recipe: {
+                    type: "object",
+                    description: "The recipe object pinning the formula and verifying key."
+                },
+                recipe_path: {
+                    type: "string",
+                    description: "File path to recipe.json if recipe object is not provided directly."
+                },
+                package_path: {
+                    type: "string",
+                    description: "File path to the proof package JSON written by prove."
+                },
+                package: {
+                    type: "object",
+                    description: "The proof package object if package_path is not provided."
+                }
+            },
+            additionalProperties: false
+        }
+    },
+    {
+        name: "status",
+        description: "Report toolchain status (NoirJS, bb.js) and installed formula artifacts.",
+        inputSchema: {
+            type: "object",
+            properties: {},
+            additionalProperties: false
+        }
+    }
+];
+export async function runMcpServer() {
+    const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+        terminal: false
+    });
+    const sendResponse = (id, result, error) => {
+        const payload = { jsonrpc: "2.0", id };
+        if (error)
+            payload.error = error;
+        else
+            payload.result = result;
+        process.stdout.write(`${JSON.stringify(payload)}\n`);
+    };
+    const sendToolResult = (id, text, isError = false) => {
+        sendResponse(id, {
+            content: [{ type: "text", text }],
+            isError
+        });
+    };
+    for await (const line of rl) {
+        const trimmed = line.trim();
+        if (!trimmed)
+            continue;
+        let req;
+        try {
+            req = JSON.parse(trimmed);
+        }
+        catch {
+            continue;
+        }
+        const { id, method, params } = req;
+        try {
+            if (method === "initialize") {
+                sendResponse(id, {
+                    protocolVersion: PROTOCOL_VERSION,
+                    capabilities: { tools: {} },
+                    serverInfo: {
+                        name: "vcc-prover-ts",
+                        version: "1.0.0"
+                    }
+                });
+            }
+            else if (method === "notifications/initialized") {
+                // Notification, no response
+            }
+            else if (method === "tools/list") {
+                sendResponse(id, { tools: TOOLS });
+            }
+            else if (method === "tools/call") {
+                const name = params?.name;
+                const args = params?.arguments || {};
+                if (name === "status") {
+                    const versions = await toolchainVersions();
+                    const circuitTarget = path.join(DEFAULT_INSTALL_DIR, "circuit", "target");
+                    let vkInstalled = false;
+                    if (fs.existsSync(path.join(circuitTarget, "vk"))) {
+                        vkInstalled = true;
+                    }
+                    sendToolResult(id, JSON.stringify({
+                        toolchain: versions,
+                        bb_js_executable: BB_JS_BIN,
+                        ready: Boolean(versions.noir_js && versions.bb_js),
+                        installed_artifacts: {
+                            install_dir: DEFAULT_INSTALL_DIR,
+                            vk_present: vkInstalled
+                        }
+                    }, null, 2));
+                }
+                else if (name === "prove") {
+                    let recipe = args.recipe;
+                    if (!recipe && args.recipe_path) {
+                        if (fs.existsSync(args.recipe_path)) {
+                            recipe = JSON.parse(fs.readFileSync(args.recipe_path, "utf8"));
+                        }
+                        else {
+                            sendToolResult(id, `Recipe file not found: ${args.recipe_path}`, true);
+                            continue;
+                        }
+                    }
+                    if (!recipe) {
+                        sendToolResult(id, "Either recipe or recipe_path must be provided", true);
+                        continue;
+                    }
+                    const inputs = args.inputs;
+                    const res = await prove({
+                        recipe,
+                        inputs,
+                        installDir: DEFAULT_INSTALL_DIR,
+                        saltDir: DEFAULT_SALT_DIR,
+                        packageDir: DEFAULT_PACKAGE_DIR
+                    });
+                    if (!res.ok) {
+                        sendToolResult(id, `Proving failed: ${res.reason}`, true);
+                    }
+                    else {
+                        const outPkg = args.include_proof ? res.package : withRedactedProof(res.package);
+                        sendToolResult(id, JSON.stringify({
+                            status: "PROVED",
+                            package_written_to: res.package_written_to,
+                            private_values_written_to: res.private_values_written_to,
+                            summary: res.summary,
+                            package: outPkg
+                        }, null, 2));
+                    }
+                }
+                else if (name === "verify") {
+                    let recipe = args.recipe;
+                    if (!recipe && args.recipe_path) {
+                        if (fs.existsSync(args.recipe_path)) {
+                            recipe = JSON.parse(fs.readFileSync(args.recipe_path, "utf8"));
+                        }
+                        else {
+                            sendToolResult(id, `Recipe file not found: ${args.recipe_path}`, true);
+                            continue;
+                        }
+                    }
+                    if (!recipe) {
+                        sendToolResult(id, "Either recipe or recipe_path must be provided", true);
+                        continue;
+                    }
+                    let proofPackage = args.package;
+                    if (!proofPackage && args.package_path) {
+                        if (fs.existsSync(args.package_path)) {
+                            proofPackage = JSON.parse(fs.readFileSync(args.package_path, "utf8"));
+                        }
+                        else {
+                            sendToolResult(id, `Package file not found: ${args.package_path}`, true);
+                            continue;
+                        }
+                    }
+                    if (!proofPackage) {
+                        sendToolResult(id, "Either package or package_path must be provided", true);
+                        continue;
+                    }
+                    const res = await verify({
+                        recipe,
+                        proofPackage,
+                        installDir: DEFAULT_INSTALL_DIR
+                    });
+                    sendToolResult(id, JSON.stringify({
+                        valid: res.valid,
+                        reason: res.reason || res.detail || (res.valid ? "Proof is cryptographically valid" : "Verification failed")
+                    }, null, 2));
+                }
+                else {
+                    sendResponse(id, undefined, { code: -32601, message: `Method or tool not found: ${name}` });
+                }
+            }
+            else {
+                sendResponse(id, undefined, { code: -32601, message: `Method not supported: ${method}` });
+            }
+        }
+        catch (err) {
+            sendResponse(id, undefined, { code: -32603, message: err.message });
+        }
+    }
+}

@@ -1,0 +1,273 @@
+{
+  "workspace": {
+    "id": "66911d99-343f-4986-9c66-7faee3413e3e",
+    "name": "test 2",
+    "status": "active"
+  },
+  "recipe_cid": "18b1d9b5773e0121e16a570baf534c2157ea279c1a9aede81b469004c2f4a523",
+  "formula": {
+    "id": "ghg-scope2",
+    "version": "v2"
+  },
+  "verification_package": {
+    "circuit_hash": "5085764e5fce68233e883f7c3eeff3f2422d47fb5ffdebb4766c52e20f2f45ac",
+    "vk_sha256": "91feb47b2744c9746cdecf1e4e66086ebf76471fb85b53b560d188884dab89fc",
+    "public_signal_order": [
+      "emission_factor_encoded",
+      "c_x",
+      "c_y"
+    ],
+    "commitment_rule": {
+      "primitive": "poseidon2",
+      "arity": 2,
+      "form": "C = H(encode(x), r)",
+      "granularity": "one commitment, with its own independent salt, per committed value"
+    },
+    "encoding_rule": {
+      "precision": {
+        "decimals": 3,
+        "encode": "value x 10^decimals",
+        "on_inexact": "reject",
+        "on_out_of_domain": "reject",
+        "provisional": true,
+        "note": "Encoding is an exact multiplication. A value not exactly representable at this precision is an error, never a rounded value: section 3.3.1 requires the tooling to reject rather than quietly prove a quantized value the client never intended. The precision itself is provisional per section 10.1, pending methodology-owner sign-off."
+      },
+      "rounding": {
+        "rescale": "half_up",
+        "applied": "once, at the final rescale",
+        "note": "This is the rounding of the product back down to the pinned precision, inside the circuit. It is a separate decision from the encoding above, which does not round at all."
+      }
+    },
+    "pinned": {
+      "nargo": "0.36.0",
+      "bb": "0.58.0",
+      "poseidon": "v0.1.0"
+    }
+  },
+  "input_schema": {
+    "schema_version": "1",
+    "formula_id": "ghg-scope2",
+    "formula_version": "v2",
+    "entry": "main",
+    "field": "bn254_fr",
+    "precision": {
+      "decimals": 3,
+      "encode": "value x 10^decimals",
+      "on_inexact": "reject",
+      "on_out_of_domain": "reject",
+      "provisional": true
+    },
+    "rounding": {
+      "rescale": "half_up",
+      "applied": "once, at the final rescale"
+    },
+    "commitment": {
+      "primitive": "poseidon2",
+      "arity": 2,
+      "form": "C = H(encode(x), r)",
+      "granularity": "one commitment, with its own independent salt, per committed value"
+    },
+    "public_signal_order": [
+      "emission_factor_encoded",
+      "c_x",
+      "c_y"
+    ],
+    "derivations": [
+      {
+        "id": "rescale",
+        "primitive": "rescale_and_round",
+        "primitive_version": "1",
+        "operands": [
+          "electricity_kwh_encoded",
+          "emission_factor_encoded"
+        ],
+        "divisor": 1000,
+        "rounding": "half_up",
+        "produces": {
+          "quotient": "quotient",
+          "remainder": "remainder",
+          "bump": "round_bump"
+        },
+        "yields": "the encoded output committed by c_y"
+      }
+    ],
+    "params": [
+      {
+        "name": "electricity_kwh_encoded",
+        "position": 0,
+        "kind": "private_input",
+        "visibility": "private",
+        "meaning": "Electricity consumed",
+        "unit": "kWh",
+        "decimals": 3,
+        "domain": {
+          "min": 0,
+          "max": 999999999999,
+          "max_decimal": "999999999.999",
+          "circuit_bounds": {
+            "max_bits": 40,
+            "lt": 1000000000000
+          }
+        },
+        "committed_by": "c_x",
+        "salt": "r_x"
+      },
+      {
+        "name": "r_x",
+        "position": 1,
+        "kind": "salt",
+        "visibility": "private",
+        "commits": "electricity_kwh_encoded",
+        "sampling": {
+          "source": "CSPRNG",
+          "width": "full field element"
+        },
+        "circuit_constrained": false,
+        "retention": "client-side, required for the audit path"
+      },
+      {
+        "name": "r_y",
+        "position": 2,
+        "kind": "salt",
+        "visibility": "private",
+        "commits": "<output>",
+        "sampling": {
+          "source": "CSPRNG",
+          "width": "full field element"
+        },
+        "circuit_constrained": false,
+        "retention": "client-side, required for the audit path"
+      },
+      {
+        "name": "quotient",
+        "position": 3,
+        "kind": "witnessed_hint",
+        "visibility": "private",
+        "produced_by": "rescale",
+        "circuit_bounds": null
+      },
+      {
+        "name": "remainder",
+        "position": 4,
+        "kind": "witnessed_hint",
+        "visibility": "private",
+        "produced_by": "rescale",
+        "circuit_bounds": {
+          "max_bits": 10,
+          "lt": 1000
+        }
+      },
+      {
+        "name": "round_bump",
+        "position": 5,
+        "kind": "witnessed_hint",
+        "visibility": "private",
+        "produced_by": "rescale",
+        "circuit_bounds": {
+          "boolean": true
+        }
+      },
+      {
+        "name": "emission_factor_encoded",
+        "position": 6,
+        "kind": "coefficient",
+        "visibility": "public",
+        "meaning": "Emission factor",
+        "unit": "kgCO2e/kWh",
+        "decimals": 3,
+        "domain": {
+          "min": 0,
+          "max": 999999,
+          "max_decimal": "999.999",
+          "circuit_bounds": {
+            "max_bits": 32,
+            "lt": 1000000
+          }
+        },
+        "binding_mode": "exact_pinned",
+        "resolved_at": "deploy"
+      },
+      {
+        "name": "c_x",
+        "position": 7,
+        "kind": "commitment",
+        "visibility": "public",
+        "commitment_of": "electricity_kwh_encoded",
+        "salt": "r_x"
+      },
+      {
+        "name": "c_y",
+        "position": 8,
+        "kind": "commitment",
+        "visibility": "public",
+        "commitment_of": "<output>",
+        "salt": "r_y"
+      }
+    ],
+    "output": {
+      "meaning": "Scope 2 emissions",
+      "unit": "tCO2e",
+      "decimals": 6,
+      "produced_by": "rescale",
+      "committed_by": "c_y",
+      "salt": "r_y",
+      "is_a_parameter": false,
+      "domain": {
+        "declared": null,
+        "enforced_in_circuit": false
+      }
+    }
+  },
+  "factor": {
+    "name": "emission_factor_encoded",
+    "value_encoded": "210",
+    "value_decimal": "0.210",
+    "set_id": "fs-eu",
+    "key": "EU_WEST",
+    "unit": "kgCO2e/kWh",
+    "decimals": 3
+  },
+  "ruleset": [
+    {
+      "methodology_id": "ghgp-scope2-guidance",
+      "version": "2015",
+      "formula_ref": null,
+      "formula_spec": {
+        "type": "arithmetic",
+        "outputs": [
+          {
+            "key": "scope2_emissions_location_based_tCO2e",
+            "formula": "electricity_consumed_kWh * grid_average_factor_kgCO2e_per_kWh * 0.001",
+            "unit": "tCO2e"
+          },
+          {
+            "key": "scope2_emissions_market_based_tCO2e",
+            "formula": "electricity_consumed_kWh * supplier_factor_kgCO2e_per_kWh * 0.001",
+            "unit": "tCO2e"
+          }
+        ]
+      },
+      "formula_spec_sha256": "c4ce17ddaa6e917339e1362f69d714cbe13056d139b6285675d321204600f299"
+    }
+  ],
+  "submit_via": {
+    "tool": "submit_proof_package",
+    "workspace_id": "66911d99-343f-4986-9c66-7faee3413e3e"
+  },
+  "package_format_version": "1",
+  "next": [
+    {
+      "step": "prove",
+      "on": "your local prover",
+      "tool": "prove",
+      "with": "this recipe and your private activity values",
+      "note": "If the prover reports nothing installed, call get_verification_package first and install what it returns."
+    },
+    {
+      "step": "submit",
+      "on": "the Methodology Graph",
+      "tool": "submit_proof_package",
+      "with": "the package prove returns, unchanged"
+    }
+  ]
+}

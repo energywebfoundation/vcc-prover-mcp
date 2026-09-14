@@ -1,0 +1,49 @@
+{
+  "manifest_version": "0.2",
+  "name": "vcc-prover",
+  "version": "1.0.0",
+  "display_name": "Energy Web Verified Compute Prover",
+  "description": "Client-side zero-knowledge UltraHonk prover for privacy-preserving methodology compute.",
+  "long_description": "TypeScript client-side zero-knowledge prover powered by NoirJS and bb.js (Wasm). Exposes status, prove, and verify tools to Claude. Runs entirely inside Node.js; private activity values and salts never leave your local machine.",
+  "author": {
+    "name": "Energy Web Foundation"
+  },
+  "license": "MIT",
+  "server": {
+    "type": "node",
+    "entry_point": "bin/vcc-prove-mcp.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/bin/vcc-prove-mcp.js"]
+    }
+  },
+  "tools": [
+    {
+      "name": "status",
+      "description": "Report whether the local Wasm toolchain (NoirJS and bb.js) is initialized and ready to prove."
+    },
+    {
+      "name": "prove",
+      "description": "Produce a zero-knowledge UltraHonk proof package from private activity data. Private data and salts are saved to ~/.vcc/private/ and never disclosed."
+    },
+    {
+      "name": "verify",
+      "description": "Verify an UltraHonk proof locally using in-memory verification keys with bb.js."
+    }
+  ],
+  "compatibility": {
+    "platforms": ["darwin", "linux", "win32"],
+    "runtimes": {
+      "node": ">=20"
+    }
+  },
+  "keywords": [
+    "zero-knowledge",
+    "noir",
+    "bbjs",
+    "energyweb",
+    "zk-snarks",
+    "verified-compute",
+    "ghg-scope2"
+  ]
+}

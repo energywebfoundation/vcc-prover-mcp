@@ -1,0 +1,36 @@
+{
+  "name": "@energyweb/vcc-prover-mcp",
+  "version": "1.0.0",
+  "description": "Client-side zero-knowledge UltraHonk prover MCP server for Energy Web verified compute.",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "vcc-prove-mcp": "./bin/vcc-prove-mcp.js",
+    "vcc-prove": "./bin/vcc-prove.js",
+    "vcc-verify": "./bin/vcc-verify.js",
+    "vcc-audit": "./bin/vcc-audit.js"
+  },
+  "files": [
+    "manifest.json",
+    "bin/*.js",
+    "dist",
+    "artifacts",
+    "README.md",
+    "CLAUDE.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "start": "node bin/vcc-prove-mcp.js",
+    "pack:mcpb": "mcpb pack . dist/vcc-prover.mcpb"
+  },
+  "dependencies": {
+    "@aztec/bb.js": "0.58.0",
+    "@noir-lang/acvm_js": "^0.52.0",
+    "@noir-lang/noir_js": "^0.36.0",
+    "@noir-lang/noirc_abi": "^0.36.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}
