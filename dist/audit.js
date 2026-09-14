@@ -3,10 +3,8 @@
  *
  * Verifies private disclosure openings (values + salts) against public commitments.
  */
-import os from "node:os";
-import path from "node:path";
 import { poseidon2 } from "./toolchain.js";
-export async function auditDisclosure(auditPack, proofPackage, hasherDir = path.join(os.homedir(), ".vcc", "install", "hasher")) {
+export async function auditDisclosure(auditPack, proofPackage, hasherDir) {
     const checks = {};
     // Verify each commitment in the audit pack
     for (const [commName, claimedCommitment] of Object.entries(auditPack.commitments)) {

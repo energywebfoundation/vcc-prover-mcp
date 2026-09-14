@@ -3,7 +3,11 @@
  */
 import { sha256Hex } from "./toolchain.js";
 export const DEFAULT_ENDPOINT = "https://mcp.methodology.energyweb.org";
-export const PACKAGE_FORMAT_VERSION = "2025-06-18";
+// The proof package schema version, which is what the Methodology Graph's
+// submit_proof_package checks. It was "2025-06-18" here, the MCP protocol date, and
+// that is a different thing entirely: every package this prover wrote declared a format
+// version the server refuses outright.
+export const PACKAGE_FORMAT_VERSION = "1";
 export function checkProofShape(pkg) {
     if (!pkg || typeof pkg !== "object") {
         return { ok: false, reason: "package must be an object" };
