@@ -17,7 +17,7 @@ Powered by **NoirJS** and **bb.js** (WebAssembly). Runs completely on your local
 ## Installation & Setup
 
 ### Option 1: Claude Desktop 1-Click Extension (.mcpb)
-1. Download the latest `vcc-prover.mcpb` from [GitHub Releases](https://github.com/energyweb/vcc-prover-mcp/releases).
+1. Download the latest `vcc-prover.mcpb` from [GitHub Releases](https://github.com/energywebfoundation/vcc-prover-mcp/releases).
 2. Double-click the `.mcpb` file to install it directly into Claude Desktop.
 3. Open Claude Desktop and start using the `status`, `prove`, and `verify` tools.
 
@@ -42,7 +42,7 @@ Add the server definition to your `claude_desktop_config.json`:
 ### Option 3: Use with Cowork / AI Coding Agents / CLI
 Clone the repository and install runtime dependencies:
 ```bash
-git clone https://github.com/energyweb/vcc-prover-mcp.git
+git clone https://github.com/energywebfoundation/vcc-prover-mcp.git
 cd vcc-prover-mcp
 npm install --omit=dev
 ```

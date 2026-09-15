@@ -1,5 +1,5 @@
 /**
- * Main entry point for @energyweb/vcc-prover-ts.
+ * Main entry point for @energyweb/vcc-prover-mcp.
  */
 export * from "./types.js";
 export * from "./encoding.js";
