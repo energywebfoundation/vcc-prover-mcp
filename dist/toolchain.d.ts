@@ -4,6 +4,7 @@
  * Integrates NoirJS (`@noir-lang/noir_js`) and Barretenberg (`bb.js`) with BN254 scalar field arithmetic.
  */
 export declare const FIELD_MODULUS = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
+export declare const HAS_BUNDLED_CRS: boolean;
 export declare const ENV: NodeJS.ProcessEnv;
 /**
  * Resolves the bb.js executable path.

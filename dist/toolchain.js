@@ -29,9 +29,37 @@ for (const dir of EXTRA_DIRS) {
     }
 }
 process.env.PATH = curPaths.join(path.delimiter);
+// Bundled Barretenberg CRS (structured reference string) cache.
+//
+// bb.js normally fetches its BN254 CRS (Aztec Ignition ceremony output) over
+// the network on first use, from https://aztec-ignition.s3.amazonaws.com,
+// caching it at `$HOME/.bb-crs/{bn254_g1,bn254_g2}.dat`. That host is not
+// reachable from every environment (corporate proxies, sandboxed CI, offline
+// dev machines), and bb.js does not fail loudly when the fetch is blocked:
+// it can end up caching a proxy error page as if it were binary CRS data,
+// which later crashes the WASM prover with an obscure "unreachable" trap.
+//
+// To avoid depending on that network call at all, this repo can bundle the
+// CRS files itself under `vendor/bb-crs-home/.bb-crs/`. bb.js resolves its
+// default CRS path via `os.homedir()`, which respects the `HOME` env var, so
+// when the bundled files are present we point the bb.js subprocess's `HOME`
+// at that vendored directory instead of the real one. If the bundled files
+// are absent, `HOME` is left untouched and bb.js falls back to its normal
+// (network-fetching) behavior.
+const REPO_CRS_HOME = path.join(__dirname, "..", "vendor", "bb-crs-home");
+const REPO_CRS_G1 = path.join(REPO_CRS_HOME, ".bb-crs", "bn254_g1.dat");
+const REPO_CRS_G2 = path.join(REPO_CRS_HOME, ".bb-crs", "bn254_g2.dat");
+export const HAS_BUNDLED_CRS = fs.existsSync(REPO_CRS_G1) && fs.existsSync(REPO_CRS_G2);
 export const ENV = {
     ...process.env,
-    PATH: process.env.PATH
+    PATH: process.env.PATH,
+    ...(HAS_BUNDLED_CRS
+        ? {
+            HOME: REPO_CRS_HOME,
+            // os.homedir() on Windows falls back to USERPROFILE.
+            USERPROFILE: REPO_CRS_HOME
+        }
+        : {})
 };
 /**
  * Resolves the bb.js executable path.

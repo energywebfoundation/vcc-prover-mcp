@@ -30,7 +30,8 @@
     "pack:mcpb": "mcpb pack . dist/vcc-prover.mcpb",
     "test": "tsx test/prover.test.ts && tsx test/in-memory.test.ts",
     "test:inmem": "tsx test/in-memory.test.ts",
-    "test:bin": "bash test/bin.test.sh"
+    "test:bin": "bash test/bin.test.sh",
+    "crs:fetch": "bash scripts/fetch-crs.sh"
   },
   "dependencies": {
     "@aztec/bb.js": "0.58.0",
