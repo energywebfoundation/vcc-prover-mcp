@@ -119,7 +119,7 @@ export async function runMcpServer() {
                     protocolVersion: PROTOCOL_VERSION,
                     capabilities: { tools: {} },
                     serverInfo: {
-                        name: "vcc-prover-ts",
+                        name: "vcc-prover-mcp",
                         version: "1.0.0"
                     }
                 });
