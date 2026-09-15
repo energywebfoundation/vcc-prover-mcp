@@ -59,6 +59,22 @@ node bin/vcc-prove.js --recipe examples/recipe.json --input "Electricity consume
 node bin/vcc-verify.js --recipe examples/recipe.json --package ~/.vcc/packages/<hash>.json
 ```
 
+### Offline / Air-Gapped CRS (Optional)
+
+`bb.js` fetches Barretenberg's BN254 CRS (Aztec Ignition ceremony output)
+over the network on first use, caching it at `~/.bb-crs/`. If your network
+blocks `aztec-ignition.s3.amazonaws.com` (common on corporate proxies and
+locked-down CI), proving fails instead of falling back cleanly.
+
+To avoid the network dependency entirely, bundle the CRS into the repo once,
+from a network that *can* reach that host:
+```bash
+npm run crs:fetch
+```
+This downloads the CRS into `vendor/bb-crs-home/.bb-crs/`. Once those files
+are present, proving and verifying use them automatically and never touch
+the network. See `vendor/bb-crs-home/.bb-crs/README.md` for details.
+
 ---
 
 ## MCP Tools Reference
