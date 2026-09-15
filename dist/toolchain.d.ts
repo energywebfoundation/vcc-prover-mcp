@@ -4,6 +4,7 @@
  * Integrates NoirJS (`@noir-lang/noir_js`) and Barretenberg (`bb.js`) with BN254 scalar field arithmetic.
  */
 export declare const FIELD_MODULUS = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
+export declare const HAS_BUNDLED_CRS: boolean;
 export declare const ENV: NodeJS.ProcessEnv;
 /**
  * Resolves the bb.js executable path.
@@ -26,11 +27,11 @@ export declare function toolchainVersions(): Promise<{
 /**
  * Initializes the standalone Poseidon2 hasher Noir project from bundled artifact if needed.
  */
-export declare function ensureHasherProject(hasherDir: string): void;
+export declare function ensureHasherProject(hasherDir?: string): void;
 /**
  * Computes Poseidon2(value, salt) over BN254 using NoirJS in-memory ACVM execution.
  */
-export declare function poseidon2(hasherDir: string, value: bigint | number | string, salt: bigint | number | string, _tag?: string): Promise<{
+export declare function poseidon2(hasherDir: string | undefined, value: bigint | number | string, salt: bigint | number | string, _tag?: string): Promise<{
     ok: true;
     value: string;
 } | {
@@ -46,7 +47,7 @@ export declare function poseidon2(hasherDir: string, value: bigint | number | st
  * then generates the UltraHonk proof with bb.js.
  * Supports both on-disk circuit project and in-memory circuit JSON.
  */
-export declare function proveCircuitWithNoirJs(circuitDir: string, circuitName: string, inputsMap: Record<string, string>, tag: string, circuitSource?: any): Promise<{
+export declare function proveCircuitWithNoirJs(circuitDir: string | undefined, circuitName: string | undefined, inputsMap: Record<string, string>, tag: string, circuitSource?: any): Promise<{
     ok: true;
     proof: Buffer;
 } | {
@@ -56,7 +57,7 @@ export declare function proveCircuitWithNoirJs(circuitDir: string, circuitName: 
 /**
  * Generates UltraHonk proof using NoirJS for witness and bb.js for proving.
  */
-export declare function proveCircuit(circuitDir: string, circuitName: string, inputsMap: Record<string, string>, tag: string, circuitSource?: any): Promise<{
+export declare function proveCircuit(circuitDir: string | undefined, circuitName: string | undefined, inputsMap: Record<string, string>, tag: string, circuitSource?: any): Promise<{
     ok: true;
     proof: Buffer;
 } | {

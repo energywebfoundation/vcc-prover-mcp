@@ -5,10 +5,9 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
 import { checkProofShape } from "./proof-package.js";
 import { sha256Hex, verifyProofWithBbJs } from "./toolchain.js";
-export async function verify({ recipe, proofPackage, installDir = path.join(os.homedir(), ".vcc", "install"), vkPath, vkBytes }) {
+export async function verify({ recipe, proofPackage, installDir, vkPath, vkBytes }) {
     const shape = checkProofShape(proofPackage);
     if (!shape.ok) {
         return { ok: false, valid: false, reason: shape.reason };
@@ -38,12 +37,14 @@ export async function verify({ recipe, proofPackage, installDir = path.join(os.h
     }
     else {
         const resolvedVkPath = vkPath ||
-            path.join(installDir, "circuit", "target", "vk");
-        if (!fs.existsSync(resolvedVkPath)) {
+            (installDir
+                ? path.join(installDir, "circuit", "target", "vk")
+                : undefined);
+        if (!resolvedVkPath || !fs.existsSync(resolvedVkPath)) {
             return {
                 ok: false,
                 valid: false,
-                reason: `Verifying key not found at ${resolvedVkPath}. Ensure formula is installed or provide vk_b64 in recipe.`
+                reason: `Verifying key not found at ${resolvedVkPath || "local install"}. Ensure formula is installed or provide vk_b64 in recipe.`
             };
         }
         finalVkTarget = resolvedVkPath;

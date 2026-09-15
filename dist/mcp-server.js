@@ -38,7 +38,7 @@ const TOOLS = [
                 },
                 include_proof: {
                     type: "boolean",
-                    description: "Include raw base64 proof in response (default: false)."
+                    description: "Return the raw base64 proof in the response as well as writing it to disk (default: false). Ask for it when you are the one submitting to the Methodology Graph, since submit_proof_package takes the proof as an argument. Send the proof_sha256 from the same response with it: the server checks the two against each other and refuses a proof that was altered on the way."
                 }
             },
             required: ["inputs"],
@@ -66,6 +66,10 @@ const TOOLS = [
                 package: {
                     type: "object",
                     description: "The proof package object if package_path is not provided."
+                },
+                include_proof: {
+                    type: "boolean",
+                    description: "Return the verified package including the raw base64 proof (default: false). This is how to read a clean copy back off disk: if submit_proof_package refuses a proof for not matching its proof_sha256, the copy was altered in transit and the one on disk is good. Do not re-prove instead; fresh salts produce a different proof, not the same one again."
                 }
             },
             additionalProperties: false
@@ -221,10 +225,16 @@ export async function runMcpServer() {
                         proofPackage,
                         installDir: DEFAULT_INSTALL_DIR
                     });
-                    sendToolResult(id, JSON.stringify({
+                    const verdict = {
                         valid: res.valid,
                         reason: res.reason || res.detail || (res.valid ? "Proof is cryptographically valid" : "Verification failed")
-                    }, null, 2));
+                    };
+                    // Only on a valid proof. Handing back the bytes of a package that has just
+                    // failed verification is handing back something to submit.
+                    if (args.include_proof && res.valid) {
+                        verdict.package = proofPackage;
+                    }
+                    sendToolResult(id, JSON.stringify(verdict, null, 2));
                 }
                 else {
                     sendResponse(id, undefined, { code: -32601, message: `Method or tool not found: ${name}` });

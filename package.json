@@ -4,6 +4,7 @@
   "description": "Client-side zero-knowledge UltraHonk prover MCP server for Energy Web verified compute.",
   "type": "module",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "bin": {
     "vcc-prove-mcp": "./bin/vcc-prove-mcp.js",
     "vcc-prove": "./bin/vcc-prove.js",
@@ -19,15 +20,29 @@
     "CLAUDE.md",
     "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
+    "build": "tsc && mkdir -p dist/artifacts && cp artifacts/hasher.json dist/artifacts/",
     "start": "node bin/vcc-prove-mcp.js",
-    "pack:mcpb": "mcpb pack . dist/vcc-prover.mcpb"
+    "mcp": "node bin/vcc-prove-mcp.js",
+    "pack:mcpb": "mcpb pack . dist/vcc-prover.mcpb",
+    "test": "tsx test/prover.test.ts && tsx test/in-memory.test.ts",
+    "test:inmem": "tsx test/in-memory.test.ts",
+    "test:bin": "bash test/bin.test.sh",
+    "crs:fetch": "bash scripts/fetch-crs.sh"
   },
   "dependencies": {
     "@aztec/bb.js": "0.58.0",
     "@noir-lang/acvm_js": "^0.52.0",
     "@noir-lang/noir_js": "^0.36.0",
     "@noir-lang/noirc_abi": "^0.36.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
   },
   "engines": {
     "node": ">=20"
