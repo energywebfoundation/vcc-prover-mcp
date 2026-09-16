@@ -9,6 +9,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { resolveSaltDir, resolvePackageDir } from "./config.js";
 import { checkDomain, decodeToDecimal, encodeExact } from "./encoding.js";
 import { runDerivation } from "./primitives.js";
 import { PACKAGE_FORMAT_VERSION } from "./proof-package.js";
@@ -39,11 +40,15 @@ export async function prove({
   circuitDir,
   circuitJson,
   circuitBytes,
-  saltDir = path.join(os.homedir(), ".vcc", "private"),
-  packageDir = path.join(os.homedir(), ".vcc", "packages"),
+  saltDir,
+  packageDir,
   tag = randomUUID().replace(/-/g, "").slice(0, 12),
   customSalts
 }: ProveOptions): Promise<ProveResult> {
+  // Layered resolution (explicit arg > env var > XDG > ~/.vcc).
+  // See src/config.ts for the full precedence rules.
+  saltDir = resolveSaltDir(saltDir);
+  packageDir = resolvePackageDir(packageDir);
   const schema = recipe.input_schema;
   if (!schema?.params) {
     return { ok: false, reason: "The recipe carries no input schema" };

@@ -9,6 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import readline from "node:readline";
+import { resolveSaltDir, resolvePackageDir } from "./config.js";
 import { checkProofShape, withRedactedProof } from "./proof-package.js";
 import { prove } from "./prove.js";
 import {
@@ -19,9 +20,14 @@ import {
 import { Recipe } from "./types.js";
 import { verify } from "./verify.js";
 
+// installDir has no XDG tier (it's a one-time toolchain
+// install location, not proof data), so it keeps its own simple env-var
+// fallback. saltDir/packageDir defer entirely to the shared resolver in
+// config.ts so env var, XDG, and ~/.vcc all apply consistently
+// across the CLI, the MCP server, and prove()'s own internal default.
 const DEFAULT_INSTALL_DIR = process.env.VCC_INSTALL_DIR || path.join(os.homedir(), ".vcc", "install");
-const DEFAULT_SALT_DIR = process.env.VCC_SALT_DIR || path.join(os.homedir(), ".vcc", "private");
-const DEFAULT_PACKAGE_DIR = process.env.VCC_PACKAGE_DIR || path.join(os.homedir(), ".vcc", "packages");
+const DEFAULT_SALT_DIR = resolveSaltDir();
+const DEFAULT_PACKAGE_DIR = resolvePackageDir();
 
 const PROTOCOL_VERSION = "2025-06-18";
 

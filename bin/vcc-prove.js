@@ -43,8 +43,11 @@ try {
 }
 
 const installDir = opt("install");
-const saltDir = opt("salt-dir", path.join(os.homedir(), ".vcc", "private"));
-const packageDir = opt("package-dir", path.join(os.homedir(), ".vcc", "packages"));
+// No hardcoded default here: leave undefined when the flag is absent so
+// prove()'s layered resolver (env var > XDG > ~/.vcc)
+// gets to decide, instead of this always winning as an "explicit" value.
+const saltDir = opt("salt-dir") || undefined;
+const packageDir = opt("package-dir") || undefined;
 
 const res = await prove({
   recipe,
