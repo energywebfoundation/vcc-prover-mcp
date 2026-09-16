@@ -9,9 +9,16 @@ This repository contains the client-side Zero-Knowledge Prover MCP server and CL
 
 ## Core Rules for AI Agents
 1. **Never Disclose Private Values**: Do not echo private activity readings, plaintext volumes, or CSPRNG salts in chat outputs or tool arguments to external services.
-2. **Local Artifact Paths**:
-   - Proof packages (public commitments + UltraHonk proof binary) are written to `~/.vcc/packages/<hash>.json`.
-   - Private disclosure packs (plaintext + blinding salts) are written with `0600` permissions to `~/.vcc/private/<hash>.json`.
+2. **Local Artifact Paths & Resolution Precedence**:
+   - **Resolution Precedence**: Artifact directories resolve in the following order:
+     1. Explicit argument (`saltDir` / `packageDir` in MCP `prove`, or `--salt-dir` / `--package-dir` in CLI).
+     2. Environment variables: `VCC_SALT_DIR` and `VCC_PACKAGE_DIR`.
+     3. XDG Base Directory convention: `$XDG_DATA_HOME/vcc/private` and `$XDG_DATA_HOME/vcc/packages`.
+     4. Default fallback: `~/.vcc/private/<hash>.json` (mode `0600`) and `~/.vcc/packages/<hash>.json`.
+   - **Claude Cowork / Connected Remote Directories**:
+     - When running inside Claude Cowork (where the agent operates in an isolated sandbox/container connected to a local workspace or remote directory via desktop bridge), default writes to `~/.vcc` remain inside the container's isolated filesystem and won't persist to the user's project folder.
+     - **Always direct writes to the connected workspace**: Specify `packageDir` / `saltDir` (or set `VCC_PACKAGE_DIR` / `VCC_SALT_DIR`) pointing to a directory within the connected folder (e.g. `./vcc/packages` and `./vcc/private`).
+     - **Never hardcode paths**: Always use the paths returned in `package_written_to` and `private_values_written_to` when inspecting files, performing verification, or streaming payloads.
 3. **Verify Before Submission**: Always run `verify` locally to ensure `valid: true` before sending any package to Methodology Graph or verifier endpoints.
 4. **Dynamic In-Memory Proving**: Proving supports dynamic circuits via embedded base64 strings (`circuit_b64` and `vk_b64`) or files without requiring local disk compilation.
 5. **One Recipe, Nothing To Install**: A recipe from the Methodology Graph's `get_workspace_instructions` is self-contained. It carries the compiled circuit and the verifying key alongside the hashes they must match, so nothing has to be installed first, and `prove` refuses outright if the artifacts it carries do not hash to the pins beside them. Write the recipe to a file and pass `recipe_path`: it runs to tens of kilobytes and pasting it back through a message is what corrupts it.
@@ -232,7 +239,7 @@ Returned if this exact proof package hash has already been submitted:
 - `verify`: Verifies an UltraHonk proof package locally against a pinned recipe/vk without network access. `include_proof` defaults to `false`.
 
 ## CLI Tools
-- `node bin/vcc-prove.js --recipe <path> --input "<name>=<value>"`
+- `node bin/vcc-prove.js --recipe <path> --input "<name>=<value>" [--package-dir <path>] [--salt-dir <path>]`
 - `node bin/vcc-verify.js --recipe <path> --package <path>`
 - `node bin/vcc-audit.js --private <path> --package <path>`
 - `node bin/vcc-prove-mcp.js` (starts stdio MCP server)
