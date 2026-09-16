@@ -15,7 +15,7 @@ import { canonicalCircuitHash, poseidon2, proveCircuit, randomFieldElement, sha2
 function paramsByKind(params, kind) {
     return params.filter((p) => p.kind === kind);
 }
-export async function prove({ recipe, inputs, installDir = path.join(os.homedir(), ".vcc", "install"), circuitDir, circuitJson, circuitBytes, saltDir = path.join(os.homedir(), ".vcc", "private"), packageDir = path.join(os.homedir(), ".vcc", "packages"), tag = randomUUID().replace(/-/g, "").slice(0, 12), customSalts }) {
+export async function prove({ recipe, inputs, installDir, circuitDir, circuitJson, circuitBytes, saltDir = path.join(os.homedir(), ".vcc", "private"), packageDir = path.join(os.homedir(), ".vcc", "packages"), tag = randomUUID().replace(/-/g, "").slice(0, 12), customSalts }) {
     const schema = recipe.input_schema;
     if (!schema?.params) {
         return { ok: false, reason: "The recipe carries no input schema" };
@@ -33,20 +33,27 @@ export async function prove({ recipe, inputs, installDir = path.join(os.homedir(
     if (!resolvedCircuitJson && recipe.verification_package?.circuit_json) {
         resolvedCircuitJson = recipe.verification_package.circuit_json;
     }
+    let circuitRawBytes = circuitBytes ? Buffer.from(circuitBytes) : null;
     if (!resolvedCircuitJson && recipe.verification_package?.circuit_b64) {
+        circuitRawBytes = Buffer.from(recipe.verification_package.circuit_b64, "base64");
         try {
-            resolvedCircuitJson = JSON.parse(Buffer.from(recipe.verification_package.circuit_b64, "base64").toString("utf-8"));
+            resolvedCircuitJson = JSON.parse(circuitRawBytes.toString("utf-8"));
         }
         catch {
             return { ok: false, reason: "circuit_b64 in recipe is not valid JSON" };
         }
     }
-    const effectiveCircuitDir = circuitDir || path.join(installDir, "circuit");
-    const hasherDir = path.join(installDir, "hasher");
+    const effectiveCircuitDir = circuitDir || (installDir ? path.join(installDir, "circuit") : undefined);
+    const hasherDir = installDir ? path.join(installDir, "hasher") : undefined;
     const circuitName = recipe.formula.id.replace(/-/g, "_");
-    const circuitPath = path.join(effectiveCircuitDir, "target", `${circuitName}.json`);
-    const vkPath = path.join(effectiveCircuitDir, "target", "vk");
     if (!resolvedCircuitJson) {
+        if (!effectiveCircuitDir) {
+            return {
+                ok: false,
+                reason: "Compiled circuit not found. Provide circuit_json or circuit_b64 in recipe, or supply circuitDir/installDir."
+            };
+        }
+        const circuitPath = path.join(effectiveCircuitDir, "target", `${circuitName}.json`);
         if (!fs.existsSync(circuitPath)) {
             return {
                 ok: false,
@@ -60,25 +67,58 @@ export async function prove({ recipe, inputs, installDir = path.join(os.homedir(
             return { ok: false, reason: `Failed to read compiled circuit at ${circuitPath}: ${e.message}` };
         }
     }
-    // Validate circuit hash against recipe pin if present
-    if (recipe.verification_package?.circuit_hash) {
+    // Check the circuit against the pin the recipe carries.
+    //
+    // Two hashes, because the two ends hash different things. The Methodology Graph pins
+    // sha256 over the artifact bytes exactly as registered. When the circuit arrives
+    // inside the recipe those same bytes are in hand, so the comparison is exact and a
+    // mismatch is fatal: proving on regardless would produce a proof against a circuit the
+    // workspace was never deployed against, which is the one thing the pin exists to stop.
+    //
+    // A circuit loaded off local disk is a different case. Noir does not emit
+    // byte-identical JSON across toolchain versions, so an installed artifact can be the
+    // same circuit and still not hash the same; there the key-sorted canonical hash is the
+    // only available signal and it stays advisory unless VCC_STRICT_CIRCUIT_HASH=1.
+    const pinnedCircuitHash = recipe.verification_package?.circuit_hash;
+    if (pinnedCircuitHash && circuitRawBytes) {
+        const rawHash = sha256Hex(circuitRawBytes);
+        if (rawHash !== pinnedCircuitHash) {
+            return {
+                ok: false,
+                reason: `Circuit hash mismatch: the recipe pins ${pinnedCircuitHash} but the circuit it carries hashes to ${rawHash}`
+            };
+        }
+    }
+    else if (pinnedCircuitHash) {
         const calcHash = canonicalCircuitHash(resolvedCircuitJson);
-        if (calcHash && calcHash !== recipe.verification_package.circuit_hash) {
+        if (calcHash && calcHash !== pinnedCircuitHash) {
             if (process.env.VCC_STRICT_CIRCUIT_HASH === "1") {
                 return {
                     ok: false,
-                    reason: `Circuit hash mismatch: expected ${recipe.verification_package.circuit_hash}, got ${calcHash}`
+                    reason: `Circuit hash mismatch: the recipe pins ${pinnedCircuitHash}, and the circuit installed on disk canonicalises to ${calcHash}`
                 };
             }
+        }
+    }
+    // The same check for the verifying key, here rather than only in verify. It costs one
+    // hash and it fails before a proof that would be refused on submission anyway.
+    if (recipe.verification_package?.vk_b64 && recipe.verification_package?.vk_sha256) {
+        const vkHash = sha256Hex(Buffer.from(recipe.verification_package.vk_b64, "base64"));
+        if (vkHash !== recipe.verification_package.vk_sha256) {
+            return {
+                ok: false,
+                reason: `Verifying key hash mismatch: the recipe pins ${recipe.verification_package.vk_sha256} but the key it carries hashes to ${vkHash}`
+            };
         }
     }
     // If relying on local disk installation, check that vk exists
     const hasVkInRecipe = Boolean(recipe.verification_package?.vk_b64 || recipe.verification_package?.vk);
     if (!circuitJson && !circuitBytes && !recipe.verification_package?.circuit_json && !recipe.verification_package?.circuit_b64) {
-        if (!hasVkInRecipe && !fs.existsSync(vkPath)) {
+        const vkPath = effectiveCircuitDir ? path.join(effectiveCircuitDir, "target", "vk") : null;
+        if (!hasVkInRecipe && (!vkPath || !fs.existsSync(vkPath))) {
             return {
                 ok: false,
-                reason: `Verifying key not found at ${vkPath} and not provided in recipe verification_package`
+                reason: `Verifying key not found at ${vkPath || "local circuit"} and not provided in recipe verification_package`
             };
         }
     }
@@ -224,25 +264,49 @@ export async function prove({ recipe, inputs, installDir = path.join(os.homedir(
     const proofB64 = proofBytes.toString("base64");
     const proofHash = sha256Hex(proofBytes);
     // 8. Public Signals
+    //
+    // Two views of one thing. The by-name record is what a human reading the package off
+    // disk wants; the ordered array of 0x-prefixed field values is the shape
+    // submit_proof_package declares, and building it here is what saves the agent from
+    // reassembling it by hand from public_signal_order on the way to submitting.
     const publicSignals = {};
+    const publicSignalsOrdered = [];
     for (const sigName of schema.public_signal_order) {
         const val = encodedValues.get(sigName);
         publicSignals[sigName] = val !== undefined ? val.toString() : "";
+        publicSignalsOrdered.push(val !== undefined ? `0x${val.toString(16).padStart(64, "0")}` : "");
     }
     const versions = await toolchainVersions();
     const proofPackage = {
-        format_version: PACKAGE_FORMAT_VERSION,
+        // The version the Methodology Graph speaks, taken from the recipe where it states
+        // one. Named package_format_version because that is the argument submit_proof_package
+        // reads; the old format_version carried the MCP protocol date, which it refuses.
+        package_format_version: recipe.package_format_version ?? PACKAGE_FORMAT_VERSION,
         formula: {
             id: recipe.formula.id,
             version: recipe.formula.version
         },
+        // Where this package is destined, copied from the recipe so the agent submitting it
+        // has the workspace id to hand without going back for the recipe. No credential is
+        // here or anywhere else in this package.
+        submit_via: recipe.submit_via ?? null,
         recipe_cid: recipe.recipe_cid,
-        public_signals: publicSignals,
+        public_signals: publicSignalsOrdered,
+        public_signals_named: publicSignals,
         public_signals_order: schema.public_signal_order,
         commitments: commitmentsRecord,
         proof_type: "UltraHonk",
         proof_bytes_b64: proofB64,
         proof_sha256: proofHash,
+        // What actually produced the proof, not what the recipe pins. The server records this
+        // as provenance without checking it, so reporting the pinned versions instead would be
+        // a claim it cannot catch and nobody asked for. Witness solving is NoirJS and proving
+        // is bb.js; nargo never runs here.
+        toolchain: {
+            nargo: versions.noir_js || undefined,
+            bb: versions.bb_js || undefined,
+            poseidon: recipe.verification_package?.pinned?.poseidon || undefined
+        },
         metadata: {
             noir_js_version: versions.noir_js || undefined,
             bb_version: versions.bb_js || undefined,
@@ -292,7 +356,7 @@ export async function prove({ recipe, inputs, installDir = path.join(os.homedir(
         package_written_to: packagePath,
         private_values_written_to: privateValuesPath,
         summary: {
-            formula: `${recipe.formula.id} v${recipe.formula.version}`,
+            formula: `${recipe.formula.id} ${recipe.formula.version}`,
             proof_sha256: proofHash,
             public_signals: publicSignals
         }

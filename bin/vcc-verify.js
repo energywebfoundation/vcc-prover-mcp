@@ -43,8 +43,7 @@ try {
   die(`could not parse package: ${e.message}`);
 }
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const installDir = opt("install", path.join(here, "..", "install"));
+const installDir = opt("install");
 const vkPath = opt("vk") || undefined;
 
 const res = await verify({

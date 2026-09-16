@@ -17,7 +17,7 @@ Powered by **NoirJS** and **bb.js** (WebAssembly). Runs completely on your local
 ## Installation & Setup
 
 ### Option 1: Claude Desktop 1-Click Extension (.mcpb)
-1. Download the latest `vcc-prover.mcpb` from [GitHub Releases](https://github.com/energyweb/vcc-prover-mcp/releases).
+1. Download the latest `vcc-prover.mcpb` from [GitHub Releases](https://github.com/energywebfoundation/vcc-prover-mcp/releases).
 2. Double-click the `.mcpb` file to install it directly into Claude Desktop.
 3. Open Claude Desktop and start using the `status`, `prove`, and `verify` tools.
 
@@ -42,7 +42,7 @@ Add the server definition to your `claude_desktop_config.json`:
 ### Option 3: Use with Cowork / AI Coding Agents / CLI
 Clone the repository and install runtime dependencies:
 ```bash
-git clone https://github.com/energyweb/vcc-prover-mcp.git
+git clone https://github.com/energywebfoundation/vcc-prover-mcp.git
 cd vcc-prover-mcp
 npm install --omit=dev
 ```
@@ -59,6 +59,22 @@ node bin/vcc-prove.js --recipe examples/recipe.json --input "Electricity consume
 node bin/vcc-verify.js --recipe examples/recipe.json --package ~/.vcc/packages/<hash>.json
 ```
 
+### Offline / Air-Gapped CRS (Optional)
+
+`bb.js` fetches Barretenberg's BN254 CRS (Aztec Ignition ceremony output)
+over the network on first use, caching it at `~/.bb-crs/`. If your network
+blocks `aztec-ignition.s3.amazonaws.com` (common on corporate proxies and
+locked-down CI), proving fails instead of falling back cleanly.
+
+To avoid the network dependency entirely, bundle the CRS into the repo once,
+from a network that *can* reach that host:
+```bash
+npm run crs:fetch
+```
+This downloads the CRS into `vendor/bb-crs-home/.bb-crs/`. Once those files
+are present, proving and verifying use them automatically and never touch
+the network. See `vendor/bb-crs-home/.bb-crs/README.md` for details.
+
 ---
 
 ## MCP Tools Reference
@@ -66,8 +82,27 @@ node bin/vcc-verify.js --recipe examples/recipe.json --package ~/.vcc/packages/<
 | Tool | Parameters | Description |
 |---|---|---|
 | `status` | None | Reports NoirJS and bb.js Wasm engine status and versions. |
-| `prove` | `recipe_path`, `inputs`, `circuit_b64`, `vk_b64` | Computes Poseidon2 commitments and generates an UltraHonk proof without disclosing private readings. |
-| `verify` | `recipe_path`, `proof_package`, `vk_b64` | Verifies the UltraHonk proof binary against the circuit verification key locally. |
+| `prove` | `recipe` or `recipe_path`, `inputs` | Computes Poseidon2 commitments and generates an UltraHonk proof without disclosing private readings. Takes the circuit and verifying key from the recipe. |
+| `verify` | `recipe` or `recipe_path`, `package_path` or `package`, `include_proof` | Verifies the UltraHonk proof binary against the pinned verification key locally. |
+
+The recipe is whatever `get_workspace_instructions` returned, saved to a file. It carries the
+compiled circuit and the verifying key, so there is nothing to install, and the hashes those
+artifacts must match, which `prove` checks before it does any work. It also carries
+`submit_via`, so `submit` needs nothing but the path to the package `prove` wrote.
+
+### Who submits
+
+This prover holds no credential for the Methodology Graph and does not post anything to it.
+The agent submits, by calling the Graph's own `submit_proof_package` with the proof as an
+argument, so the ~19KB of base64 crosses a message. That means:
+
+- call `prove` with `include_proof: true` to get the bytes,
+- pass the package fields through as `prove` wrote them: `package_format_version`,
+  `public_signals` (already the ordered 0x array), `formula`, `proof_sha256`, `toolchain`,
+- send `proof_sha256` with the proof, always. The server checks the two against each other and
+  refuses a mismatch rather than recording a round nobody can verify,
+- if it does refuse, call `verify` with `include_proof: true` for a clean copy off disk. Do not
+  re-prove; fresh salts make a different proof, not the same one again.
 
 ---
 

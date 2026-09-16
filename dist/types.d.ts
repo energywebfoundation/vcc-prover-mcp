@@ -89,6 +89,15 @@ export interface VerificationPackageMetadata {
      */
     vk?: string;
 }
+export interface SubmitVia {
+    tool?: string;
+    workspace_id?: string;
+    /**
+     * Where a package is posted. Stated so a prover configured with its own API key can
+     * post one itself; no credential is ever carried alongside it.
+     */
+    endpoint?: string;
+}
 export interface Recipe {
     workspace?: {
         id: string;
@@ -102,6 +111,26 @@ export interface Recipe {
     };
     verification_package?: VerificationPackageMetadata;
     input_schema: InputSchema;
+    /**
+     * The coefficient frozen when the workspace was deployed, already encoded. Used as
+     * given: re-deriving it from value_decimal is where a prover and the server's
+     * catalogue check drift apart by one unit in the last place.
+     */
+    factor?: {
+        name?: string;
+        value_encoded: string;
+        value_decimal?: string | null;
+        set_id?: string | null;
+        key?: string | null;
+        unit?: string | null;
+        decimals?: number;
+    };
+    factors?: Record<string, string>;
+    ruleset?: any;
+    /** The package schema version the issuing server speaks. */
+    package_format_version?: string;
+    submit_via?: SubmitVia;
+    next?: any[];
     submission_endpoint?: string;
 }
 export interface EncodedValueResult {
@@ -126,14 +155,26 @@ export interface RescaleAndRoundResult {
     output: bigint;
 }
 export interface ProofPackage {
+    /** The package schema version submit_proof_package checks. Currently "1". */
+    package_format_version?: string;
+    /** Legacy. Carried the MCP protocol date, which is not a package format version. */
     format_version?: string;
     formula: {
         id: string;
         version: string;
     };
+    submit_via?: SubmitVia | null;
     recipe_cid?: string;
-    public_signals: Record<string, string>;
+    /** The ordered, 0x-prefixed field values, as submit_proof_package declares them. */
+    public_signals: string[];
+    /** The same signals keyed by name, for a human reading the package off disk. */
+    public_signals_named?: Record<string, string>;
     public_signals_order: string[];
+    toolchain?: {
+        nargo?: string;
+        bb?: string;
+        poseidon?: string;
+    };
     commitments: Record<string, string>;
     proof_type: "UltraHonk" | string;
     proof_bytes_b64: string;
