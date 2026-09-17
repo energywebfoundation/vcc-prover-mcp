@@ -138,6 +138,8 @@ This is the complete JSON document that `prove` writes to `~/.vcc/packages/<hash
 | `proof_sha256` | `string` | Optional (Recommended) | 64-character hex SHA-256 of the decoded proof bytes. If provided, server compares it against the received bytes and rejects any altered payload. |
 | `toolchain` | `object` | Optional | Provenance object `{ nargo, bb, poseidon }`. Recorded on receipt; not pinned. |
 | `commitments` | `object` | Optional | Poseidon2 commitments (`c_x`, `c_y`). Preserved in package. |
+| `period_start` | `string` | Optional | Reporting period start date (`DD/MM/YYYY`, `D/M/YYYY`, or `YYYY-MM-DD`). Automatically normalized to `YYYY-MM-DD` and persisted to the workspace snapshot. |
+| `period_end` | `string` | Optional | Reporting period end date (`DD/MM/YYYY`, `D/M/YYYY`, or `YYYY-MM-DD`). Must not be earlier than `period_start`. Persisted to the workspace snapshot. |
 | **Private Fields** | - | **STRICTLY FORBIDDEN** | A proof package must carry **no private parameters** (e.g. `electricity_consumed_kwh`, salts `r_x`, `r_y`, quotients, remainders). The server checks against the schema and immediately rejects requests containing private fields. |
 
 ---
@@ -155,7 +157,9 @@ If shell execution or HTTP streaming is strictly unavailable in your execution e
   "public_signals": "string[], required — 0x-prefixed field values, in declared order",
   "proof": "string, required — proof bytes base64 (or proof_bytes_b64)",
   "proof_sha256": "string, strongly recommended — checked against bytes; mismatch is refused",
-  "toolchain": "object, optional — { nargo, bb, poseidon }"
+  "toolchain": "object, optional — { nargo, bb, poseidon }",
+  "period_start": "string, optional — reporting period start (DD/MM/YYYY or YYYY-MM-DD)",
+  "period_end": "string, optional — reporting period end (DD/MM/YYYY or YYYY-MM-DD)"
 }
 ```
 
@@ -193,6 +197,10 @@ Upon receiving the proof package (via HTTP upload or `submit_proof_package`), th
       "proof_sha256": "4b68ff0cfd0bf94446b85679fdfa6f959c5d120a1f26cf9c77e7774dc594cfdc",
       "voting_round_id": "4b68ff0cfd0bf94446b85679fdfa6f959c5d120a1f26cf9c77e7774dc594cfdc",
       "voting_start_status": "started",
+      "reporting_period": {
+        "period_start": "2026-01-01",
+        "period_end": "2026-01-31"
+      },
       "checks": {
         "catalogue": "passed"
       }
