@@ -12,6 +12,8 @@ Powered by **NoirJS** and **bb.js** (WebAssembly). Runs completely on your local
 - **Pure Node.js**: Portable across macOS, Linux, and Windows (Node.js >= 20).
 - **Claude Desktop & Cowork Ready**: Includes `.mcpb` manifest and stdio MCP server for immediate agent integration.
 
+> 📖 **Comprehensive Guide**: See **[USAGE.md](USAGE.md)** for detailed CLI reference, AI agent/IDE configuration (Antigravity, Claude, Cursor), programmatic TypeScript SDK examples, and Methodology Graph submission workflows.
+
 ---
 
 ## Installation & Setup
@@ -21,41 +23,52 @@ Powered by **NoirJS** and **bb.js** (WebAssembly). Runs completely on your local
 2. Double-click the `.mcpb` file to install it directly into Claude Desktop.
 3. Open Claude Desktop and start using the `status`, `prove`, and `verify` tools.
 
-### Option 2: Add Manually to Claude Desktop Config
-Add the server definition to your `claude_desktop_config.json`:
-- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+### Option 2: Add to AI Assistant Config via `npx` (Claude Desktop / Antigravity / Cursor)
+Add the server definition using `npx` (requires Node.js >= 20, zero repo cloning):
+- **Antigravity / Gemini IDE**: `~/.gemini/config/mcp_config.json`
+- **Claude Desktop (macOS)**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Claude Desktop (Windows)**: `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
   "mcpServers": {
     "vcc-prover": {
-      "command": "node",
+      "command": "npx",
       "args": [
-        "/path/to/vcc-prover-mcp/bin/vcc-prove-mcp.js"
+        "-y",
+        "-p",
+        "@energyweb/vcc-prover-mcp",
+        "vcc-prove-mcp"
       ]
     }
   }
 }
 ```
 
-### Option 3: Use with Cowork / AI Coding Agents / CLI
-Clone the repository and install runtime dependencies:
+### Option 3: Run via CLI or Cowork / AI Coding Agents
+
+#### A. Zero-Install via `npx` (Recommended):
+```bash
+# Check prover status / help
+npx -y -p @energyweb/vcc-prover-mcp vcc-prove --help
+
+# Generate a zero-knowledge proof
+npx -y -p @energyweb/vcc-prover-mcp vcc-prove --recipe examples/recipe.json --input "Electricity consumed=1500.734"
+
+# Verify a proof package locally
+npx -y -p @energyweb/vcc-prover-mcp vcc-verify --recipe examples/recipe.json --package ~/.vcc/packages/<hash>.json
+
+# Audit private disclosures against public commitments
+npx -y -p @energyweb/vcc-prover-mcp vcc-audit --private ~/.vcc/private/<hash>.json --package ~/.vcc/packages/<hash>.json
+```
+
+#### B. From Cloned Repository:
 ```bash
 git clone https://github.com/energywebfoundation/vcc-prover-mcp.git
 cd vcc-prover-mcp
 npm install --omit=dev
-```
 
-Run CLI tools directly:
-```bash
-# Check prover status
-node bin/vcc-prove.js --help
-
-# Generate a zero-knowledge proof
 node bin/vcc-prove.js --recipe examples/recipe.json --input "Electricity consumed=1500.734"
-
-# Verify a proof package locally
 node bin/vcc-verify.js --recipe examples/recipe.json --package ~/.vcc/packages/<hash>.json
 ```
 
