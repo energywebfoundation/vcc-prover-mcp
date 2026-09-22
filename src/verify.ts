@@ -1,5 +1,5 @@
 /**
- * Proof Verification for VCC Prover TS.
+ * Proof Verification for VCC Prover TS. updated
  *
  * Verifies UltraHonk proofs against the pinned verifying key using bb.js.
  */
@@ -51,11 +51,11 @@ export async function verify({
       vkPath ||
       (installDir
         ? path.join(
-            installDir,
-            "circuit",
-            "target",
-            "vk"
-          )
+          installDir,
+          "circuit",
+          "target",
+          "vk"
+        )
         : undefined);
 
     if (!resolvedVkPath || !fs.existsSync(resolvedVkPath)) {
