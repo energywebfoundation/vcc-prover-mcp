@@ -1,6 +1,6 @@
 {
   "name": "@energyweb/vcc-prover-mcp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Client-side zero-knowledge UltraHonk prover MCP server for Energy Web verified compute.",
   "repository": {
     "type": "git",
