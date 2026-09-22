@@ -3,7 +3,7 @@
     "vcc-prover": {
       "command": "node",
       "args": [
-        "/PATH/TO/vcc-prover-mcp/bin/vcc-prove-mcp.js"
+        "/PATH/PATH/TO/vcc-prover-mcp/bin/vcc-prove-mcp.js"
       ]
     }
   }
