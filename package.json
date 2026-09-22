@@ -10,6 +10,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
+    "vcc-prover-mcp": "./bin/vcc-prove-mcp.js",
     "vcc-prove-mcp": "./bin/vcc-prove-mcp.js",
     "vcc-prove": "./bin/vcc-prove.js",
     "vcc-verify": "./bin/vcc-verify.js",
@@ -20,7 +21,9 @@
     "bin/*.js",
     "dist",
     "artifacts",
+    "vendor",
     "README.md",
+    "USAGE.md",
     "CLAUDE.md",
     "LICENSE"
   ],
