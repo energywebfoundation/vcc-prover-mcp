@@ -1,5 +1,5 @@
 /**
- * Proof Verification for VCC Prover TS.
+ * Proof Verification for VCC Prover TS. updated
  *
  * Verifies UltraHonk proofs against the pinned verifying key using bb.js.
  */
