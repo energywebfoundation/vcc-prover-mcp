@@ -369,7 +369,8 @@ export async function prove({
     toolchain: {
       nargo: versions.noir_js || undefined,
       bb: versions.bb_js || undefined,
-      poseidon: recipe.verification_package?.pinned?.poseidon || undefined
+      poseidon: recipe.verification_package?.pinned?.poseidon || undefined,
+      prover: versions.prover || undefined
     },
     metadata: {
       noir_js_version: versions.noir_js || undefined,

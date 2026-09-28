@@ -49,6 +49,9 @@ Add the server definition using `npx` (requires Node.js >= 20, zero repo cloning
 
 #### A. Zero-Install via `npx` (Recommended):
 ```bash
+# View the full usage guide directly in terminal
+npx -y -p @energyweb/vcc-prover-mcp vcc-usage
+
 # Check prover status / help
 npx -y -p @energyweb/vcc-prover-mcp vcc-prove --help
 

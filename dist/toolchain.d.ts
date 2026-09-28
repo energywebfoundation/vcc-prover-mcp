@@ -23,6 +23,7 @@ export declare function canonicalCircuitHash(bytes: Buffer | string | object): s
 export declare function toolchainVersions(): Promise<{
     noir_js: string;
     bb_js: string;
+    prover: string | undefined;
 }>;
 /**
  * Initializes the standalone Poseidon2 hasher Noir project from bundled artifact if needed.

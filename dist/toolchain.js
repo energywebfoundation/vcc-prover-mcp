@@ -110,10 +110,27 @@ export function canonicalCircuitHash(bytes) {
         return null;
     }
 }
+// Own package identity (name@version), read once from package.json so the proof
+// package's toolchain provenance records which build of this prover produced it.
+let cachedProverVersion;
+function proverVersion() {
+    if (cachedProverVersion !== undefined)
+        return cachedProverVersion;
+    try {
+        const pkgJsonPath = path.join(__dirname, "..", "package.json");
+        const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8"));
+        cachedProverVersion = pkg.name && pkg.version ? `${pkg.name}@${pkg.version}` : pkg.version;
+    }
+    catch {
+        cachedProverVersion = undefined;
+    }
+    return cachedProverVersion;
+}
 export async function toolchainVersions() {
     const bb_js = "0.58.0 (bb.js)";
     const noir_js = "0.36.0 (NoirJS)";
-    return { noir_js, bb_js };
+    const prover = proverVersion();
+    return { noir_js, bb_js, prover };
 }
 /**
  * Initializes the standalone Poseidon2 hasher Noir project from bundled artifact if needed.

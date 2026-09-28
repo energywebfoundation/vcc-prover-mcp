@@ -174,6 +174,7 @@ export interface ProofPackage {
         nargo?: string;
         bb?: string;
         poseidon?: string;
+        prover?: string;
     };
     commitments: Record<string, string>;
     proof_type: "UltraHonk" | string;

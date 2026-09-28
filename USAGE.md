@@ -41,8 +41,11 @@ npm install @energyweb/vcc-prover-mcp
 ```
 
 ### Option C: Zero-Install via `npx` (Recommended)
-Run all CLI tools and MCP server directly with zero cloning or installation:
+Run all CLI tools, display guides, and run the MCP server directly with zero cloning or installation:
 ```bash
+# Display this USAGE.md guide directly in terminal:
+npx -y -p @energyweb/vcc-prover-mcp vcc-usage
+
 # Generate a zero-knowledge proof:
 npx -y -p @energyweb/vcc-prover-mcp vcc-prove --recipe recipe.json --input "Electricity consumed=1500.734"
 
@@ -209,7 +212,7 @@ Verifies an UltraHonk proof package against a recipe and verification key offlin
 
 ## 5. Command-Line Interface (CLI) Usage
 
-The package provides four CLI tools.
+The package provides five CLI tools: `vcc-prove`, `vcc-verify`, `vcc-audit`, `vcc-prove-mcp`, and `vcc-usage`.
 
 ### A. `vcc-prove` — Generate Proof
 Generates the UltraHonk proof, computes commitments, and saves public and private packages.
@@ -313,6 +316,22 @@ npx -y -p @energyweb/vcc-prover-mcp vcc-prove-mcp
 
 # Or if installed globally:
 vcc-prove-mcp
+```
+
+---
+
+### E. `vcc-usage` — View Documentation in Terminal
+Outputs this comprehensive markdown usage manual directly to the terminal stdout:
+
+```bash
+# Zero-install via npx:
+npx -y -p @energyweb/vcc-prover-mcp vcc-usage
+
+# View through pager (scrollable):
+npx -y -p @energyweb/vcc-prover-mcp vcc-usage | less
+
+# Or if installed globally:
+vcc-usage
 ```
 
 ---
