@@ -7,7 +7,7 @@ echo "================================================================="
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-RECIPE="$ROOT_DIR/Claude outputs/recipe.json"
+RECIPE="$ROOT_DIR/examples/recipe.json"
 
 cd "$ROOT_DIR"
 

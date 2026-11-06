@@ -81,7 +81,7 @@ export interface VerificationPackageMetadata {
      */
     circuit_b64?: string;
     /**
-     * Base64-encoded UltraHonk verifying key (1,825 bytes raw).
+     * Base64-encoded UltraHonk verifying key, as `bb write_vk` writes it.
      */
     vk_b64?: string;
     /**

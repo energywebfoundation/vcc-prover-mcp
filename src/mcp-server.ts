@@ -13,7 +13,7 @@ import { resolveSaltDir, resolvePackageDir } from "./config.js";
 import { checkProofShape, withRedactedProof } from "./proof-package.js";
 import { prove } from "./prove.js";
 import {
-  BB_JS_BIN,
+  CRS_DIR,
   sha256Hex,
   toolchainVersions
 } from "./toolchain.js";
@@ -170,7 +170,8 @@ export async function runMcpServer(): Promise<void> {
             JSON.stringify(
               {
                 toolchain: versions,
-                bb_js_executable: BB_JS_BIN,
+                bb_backend: "bb.js Wasm (in-process)",
+                crs_dir: CRS_DIR ?? "bb.js default ($CRS_PATH or ~/.bb-crs, downloaded on first use)",
                 ready: Boolean(versions.noir_js && versions.bb_js),
                 installed_artifacts: {
                   install_dir: DEFAULT_INSTALL_DIR,

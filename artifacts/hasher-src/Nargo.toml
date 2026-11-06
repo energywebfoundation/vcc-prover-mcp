@@ -1,0 +1,13 @@
+[package]
+name = "hasher"
+type = "bin"
+authors = ["Energy Web"]
+# Source of artifacts/hasher.json. Same toolchain and poseidon pin as the formula
+# circuit it serves: the hasher computes the commitments the circuit checks, so the
+# two must never diverge. Rebuild: copy this file and main.nr into a project
+# (src/main.nr), run `nargo compile`, copy target/hasher.json over
+# artifacts/hasher.json, and make the file_map paths relative.
+compiler_version = "=1.0.0"
+
+[dependencies]
+poseidon = { tag = "v0.4.0", git = "https://github.com/noir-lang/poseidon" }

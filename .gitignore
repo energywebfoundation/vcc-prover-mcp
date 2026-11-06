@@ -1,1 +1,3 @@
 /node_modules
+# Proof packages and private salts written by prove into ./vcc
+/vcc/
