@@ -14,7 +14,9 @@ import { checkDomain, decodeToDecimal, encodeExact } from "./encoding.js";
 import { runDerivation } from "./primitives.js";
 import { PACKAGE_FORMAT_VERSION } from "./proof-package.js";
 import {
+  BB_VERSION,
   canonicalCircuitHash,
+  normaliseVersion,
   poseidon2,
   proveCircuit,
   randomFieldElement,
@@ -144,6 +146,21 @@ export async function prove({
         reason: `Verifying key hash mismatch: the recipe pins ${recipe.verification_package.vk_sha256} but the key it carries hashes to ${vkHash}`
       };
     }
+  }
+
+  // The backend the recipe pins has to be the one this build proves with. A key made by
+  // another bb version uses another proof format and transcript, so the proof would be
+  // refused on submission after the user had waited for it; refuse here instead.
+  const pinnedBb = recipe.verification_package?.pinned?.bb;
+  if (pinnedBb && normaliseVersion(pinnedBb) !== BB_VERSION) {
+    return {
+      ok: false,
+      reason:
+        `This recipe pins bb ${pinnedBb}, and this prover proves with bb ${BB_VERSION}. ` +
+        `A proof from here would not verify against that recipe's key. Ask the Methodology Graph ` +
+        `for a recipe of a formula version pinned to bb ${BB_VERSION}, or prove with a prover ` +
+        `release built for bb ${pinnedBb}.`
+    };
   }
 
   // If relying on local disk installation, check that vk exists
@@ -311,7 +328,7 @@ export async function prove({
     inputsMap[p.name] = v.toString();
   }
 
-  // 7. Solve witness with NoirJS and prove with bb.js prove_ultra_honk
+  // 7. Solve witness with NoirJS and prove with bb.js (UltraHonk)
   const proveRes = await proveCircuit(
     effectiveCircuitDir,
     circuitName,
@@ -337,6 +354,24 @@ export async function prove({
     const val = encodedValues.get(sigName);
     publicSignals[sigName] = val !== undefined ? val.toString() : "";
     publicSignalsOrdered.push(val !== undefined ? `0x${val.toString(16).padStart(64, "0")}` : "");
+  }
+
+  // The public inputs the circuit itself exposed lead the proof bytes, and they are what
+  // the server reads the emission factor from. If they are not the signals listed above,
+  // in that order, the recipe's public_signal_order does not describe this circuit and the
+  // package would contradict itself; refuse it rather than write it.
+  const proved = proveRes.publicInputs;
+  if (
+    proved.length !== publicSignalsOrdered.length ||
+    proved.some((v, i) => v.toLowerCase() !== publicSignalsOrdered[i].toLowerCase())
+  ) {
+    return {
+      ok: false,
+      reason:
+        `The circuit's public inputs do not match the recipe's public_signal_order ` +
+        `(${schema.public_signal_order.join(", ")}): the circuit exposed ${proved.length} ` +
+        `public input(s), and they differ from the values computed for those signals`
+    };
   }
 
   const versions = await toolchainVersions();
@@ -365,7 +400,7 @@ export async function prove({
     // What actually produced the proof, not what the recipe pins. The server records this
     // as provenance without checking it, so reporting the pinned versions instead would be
     // a claim it cannot catch and nobody asked for. Witness solving is NoirJS and proving
-    // is bb.js; nargo never runs here.
+    // is bb.js (Wasm); neither the nargo nor the bb binary runs here.
     toolchain: {
       nargo: versions.noir_js || undefined,
       bb: versions.bb_js || undefined,

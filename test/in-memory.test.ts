@@ -15,7 +15,11 @@ async function runInMemoryTests() {
 
   const recipePath = path.join(__dirname, "..", "examples", "recipe.json");
   const inMemoryRecipe: Recipe = JSON.parse(fs.readFileSync(recipePath, "utf8"));
-  const circuitJson = inMemoryRecipe.verification_package!.circuit_json;
+  // Recipes carry the circuit as circuit_b64 (as the Methodology Graph serves it) or as
+  // circuit_json; the tests below need it in both forms.
+  const vp = inMemoryRecipe.verification_package!;
+  const circuitJson =
+    vp.circuit_json ?? JSON.parse(Buffer.from(vp.circuit_b64!, "base64").toString("utf-8"));
   const circuitRaw = JSON.stringify(circuitJson);
   const vkB64 = inMemoryRecipe.verification_package!.vk_b64!;
   const vkBytes = Buffer.from(vkB64, "base64");
@@ -79,7 +83,7 @@ async function runInMemoryTests() {
     packageDir: testPackageDir,
     tag: "inmem_test_direct"
   });
-  assert(proveResDirect.ok, "Prove with direct circuitJson succeeds");
+  assert(proveResDirect.ok, `Prove with direct circuitJson succeeds: ${!proveResDirect.ok ? (proveResDirect as any).reason : ""}`);
   console.log("  [PASS] Proving succeeded with options.circuitJson");
 
   const verifyResDirect = await verify({
@@ -100,7 +104,7 @@ async function runInMemoryTests() {
       circuit_hash: sha256Hex(circuitB64Bytes),
       circuit_b64: circuitB64Bytes.toString("base64"),
       vk_b64: vkB64,
-      vk_sha256: "8c27b4ca5dc41e6452d3298c5fb323019cbf404d176086cca5783a3197f994e9"
+      vk_sha256: sha256Hex(vkBytes)
     }
   };
   const proveResB64 = await prove({

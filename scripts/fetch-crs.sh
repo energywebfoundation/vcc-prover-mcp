@@ -3,7 +3,8 @@
 # Downloads Barretenberg's BN254 CRS (Aztec Ignition ceremony output) and
 # bundles it into this repo at vendor/bb-crs-home/.bb-crs/, so that bb.js
 # never needs to fetch it over the network at prove/verify time (see the
-# comment above HAS_BUNDLED_CRS in src/toolchain.ts).
+# comment above REPO_CRS_DIR in src/toolchain.ts). bb.js 6 reads these as its
+# uncompressed G1 cache (64 bytes/point) and G2 point, the Ignition flat format.
 #
 # This must be run from a network that can actually reach
 # aztec-ignition.s3.amazonaws.com — some corporate/CI networks block it,

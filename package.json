@@ -1,6 +1,6 @@
 {
   "name": "@energyweb/vcc-prover-mcp",
-  "version": "1.0.2",
+  "version": "2.0.0",
   "description": "Client-side zero-knowledge UltraHonk prover MCP server for Energy Web verified compute.",
   "repository": {
     "type": "git",
@@ -42,10 +42,10 @@
     "crs:fetch": "bash scripts/fetch-crs.sh"
   },
   "dependencies": {
-    "@aztec/bb.js": "0.58.0",
-    "@noir-lang/acvm_js": "^0.52.0",
-    "@noir-lang/noir_js": "^0.36.0",
-    "@noir-lang/noirc_abi": "^0.36.0"
+    "@aztec-foundation/bb.js": "6.0.0",
+    "@noir-lang/acvm_js": "1.0.0",
+    "@noir-lang/noir_js": "1.0.0",
+    "@noir-lang/noirc_abi": "1.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.20.2",

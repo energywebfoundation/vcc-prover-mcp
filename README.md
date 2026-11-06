@@ -8,7 +8,7 @@ Powered by **NoirJS** and **bb.js** (WebAssembly). Runs completely on your local
 
 ## Features
 - **Zero-Knowledge Privacy**: Private activity meter readings and CSPRNG blinding salts never leave your machine.
-- **UltraHonk Proof Backend**: State-of-the-art ZK proving via `@aztec/bb.js`.
+- **UltraHonk Proof Backend**: State-of-the-art ZK proving via `@aztec-foundation/bb.js` 6.0.0 (Wasm), for circuits compiled with Noir 1.0.0. Recipes must pin `bb` 6.0.0; a recipe pinned to an older backend is refused with a message saying so.
 - **Pure Node.js**: Portable across macOS, Linux, and Windows (Node.js >= 20).
 - **Claude Desktop & Cowork Ready**: Includes `.mcpb` manifest and stdio MCP server for immediate agent integration.
 
@@ -77,10 +77,10 @@ node bin/vcc-verify.js --recipe examples/recipe.json --package ~/.vcc/packages/<
 
 ### Offline / Air-Gapped CRS (Optional)
 
-`bb.js` fetches Barretenberg's BN254 CRS (Aztec Ignition ceremony output)
-over the network on first use, caching it at `~/.bb-crs/`. If your network
-blocks `aztec-ignition.s3.amazonaws.com` (common on corporate proxies and
-locked-down CI), proving fails instead of falling back cleanly.
+`bb.js` needs Barretenberg's BN254 CRS (Aztec Ignition ceremony output). Without
+a bundled copy it downloads it from `crs.aztec-cdn.foundation` on first use and
+caches it at `$CRS_PATH` or `~/.bb-crs/`. If your network blocks that host
+(common on corporate proxies and locked-down CI), proving fails.
 
 To avoid the network dependency entirely, bundle the CRS into the repo once,
 from a network that *can* reach that host:
