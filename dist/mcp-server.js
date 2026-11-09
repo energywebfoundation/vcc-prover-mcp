@@ -11,7 +11,7 @@ import readline from "node:readline";
 import { resolveSaltDir, resolvePackageDir } from "./config.js";
 import { withRedactedProof } from "./proof-package.js";
 import { prove } from "./prove.js";
-import { BB_JS_BIN, toolchainVersions } from "./toolchain.js";
+import { CRS_DIR, toolchainVersions } from "./toolchain.js";
 import { verify } from "./verify.js";
 // installDir has no XDG tier (it's a one-time toolchain
 // install location, not proof data), so it keeps its own simple env-var
@@ -152,7 +152,8 @@ export async function runMcpServer() {
                     }
                     sendToolResult(id, JSON.stringify({
                         toolchain: versions,
-                        bb_js_executable: BB_JS_BIN,
+                        bb_backend: "bb.js Wasm (in-process)",
+                        crs_dir: CRS_DIR ?? "bb.js default ($CRS_PATH or ~/.bb-crs, downloaded on first use)",
                         ready: Boolean(versions.noir_js && versions.bb_js),
                         installed_artifacts: {
                             install_dir: DEFAULT_INSTALL_DIR,

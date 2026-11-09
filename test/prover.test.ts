@@ -91,8 +91,8 @@ async function runTests() {
 
   // 4. Standalone Poseidon2 Hashing
   console.log("\n--- TEST 4: Verified Poseidon2 Circuit Delegation ---");
-  const hasherDir = path.join(__dirname, "..", "..", "mcp-test", "hasher");
-  const hashRes = await poseidon2(hasherDir, 1540250n, 111n, "test_h1");
+  // No hasher dir: the bundled artifacts/hasher.json, the one prove uses.
+  const hashRes = await poseidon2(undefined, 1540250n, 111n, "test_h1");
   assert(hashRes.ok, "Poseidon2 hash computed via Noir constraint");
   if (hashRes.ok) {
     assert(

@@ -3,79 +3,93 @@
  *
  * Integrates NoirJS (`@noir-lang/noir_js`) and Barretenberg (`bb.js`) with BN254 scalar field arithmetic.
  */
-import { execFile, spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { Noir } from "@noir-lang/noir_js";
-const execFileAsync = promisify(execFile);
+import { BackendType, Barretenberg, Crs, UltraHonkBackend, UltraHonkVerifierBackend, deflattenFields, reconstructHonkProof, splitHonkProof } from "@aztec-foundation/bb.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 // BN254 scalar field modulus
 export const FIELD_MODULUS = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
-// Augment PATH for local npm-installed CLI binaries (bb.js)
-const EXTRA_DIRS = [
-    path.join(__dirname, "..", "node_modules", ".bin"),
-    path.join(__dirname, "node_modules", ".bin")
-];
-const curPaths = (process.env.PATH || "").split(path.delimiter);
-for (const dir of EXTRA_DIRS) {
-    if (fs.existsSync(dir) && !curPaths.includes(dir)) {
-        curPaths.unshift(dir);
-    }
+// The proving backend this build drives, and the one a recipe must pin for a proof from
+// here to verify against its key. The registry pins bb by version, and bb's proof format
+// and transcript changed between 0.58.0 and 6.0.0, so a 0.58.0 key cannot check a proof
+// from this backend or the other way round.
+export const BB_VERSION = "6.0.0";
+export const NOIR_VERSION = "1.0.0";
+/** A version string without the leading "v" some bb releases print ("v6.0.0" -> "6.0.0"). */
+export function normaliseVersion(v) {
+    return String(v).trim().replace(/^v/, "");
 }
-process.env.PATH = curPaths.join(path.delimiter);
-// Bundled Barretenberg CRS (structured reference string) cache.
+// The verifier target every proof from here is made and checked for: Poseidon2 transcript,
+// zero-knowledge, no IPA accumulation. It is bb's own default (`bb prove` with no -t), and
+// the default the Methodology Graph's verifier uses, so the three agree on the transcript.
+const VERIFIER_TARGET = "noir-recursive";
+// Barretenberg CRS (structured reference string).
 //
-// bb.js normally fetches its BN254 CRS (Aztec Ignition ceremony output) over
-// the network on first use, from https://aztec-ignition.s3.amazonaws.com,
-// caching it at `$HOME/.bb-crs/{bn254_g1,bn254_g2}.dat`. That host is not
-// reachable from every environment (corporate proxies, sandboxed CI, offline
-// dev machines), and bb.js does not fail loudly when the fetch is blocked:
-// it can end up caching a proxy error page as if it were binary CRS data,
-// which later crashes the WASM prover with an obscure "unreachable" trap.
+// bb.js loads the BN254 CRS (Aztec Ignition ceremony output) from a cache directory and
+// downloads it from crs.aztec-cdn.foundation when the cache is short. That host is not
+// reachable from every environment (corporate proxies, sandboxed CI, offline machines),
+// so this package can carry the CRS itself under vendor/bb-crs-home/.bb-crs/ and point
+// bb.js at it through its crsPath option. Without the bundled files, bb.js's own default
+// applies: $CRS_PATH, else ~/.bb-crs, downloading on first use.
 //
-// To avoid depending on that network call at all, this repo can bundle the
-// CRS files itself under `vendor/bb-crs-home/.bb-crs/`. bb.js resolves its
-// default CRS path via `os.homedir()`, which respects the `HOME` env var, so
-// when the bundled files are present we point the bb.js subprocess's `HOME`
-// at that vendored directory instead of the real one. If the bundled files
-// are absent, `HOME` is left untouched and bb.js falls back to its normal
-// (network-fetching) behavior.
-const REPO_CRS_HOME = path.join(__dirname, "..", "vendor", "bb-crs-home");
-const REPO_CRS_G1 = path.join(REPO_CRS_HOME, ".bb-crs", "bn254_g1.dat");
-const REPO_CRS_G2 = path.join(REPO_CRS_HOME, ".bb-crs", "bn254_g2.dat");
+// Only the BN254 SRS is loaded. bb.js's own initialisation also loads a Grumpkin SRS,
+// which is for the Chonk/IPA flows and no part of an UltraHonk proof, and which would be
+// a second download every fresh machine has to make; loading the SRS here instead of
+// through Barretenberg.new keeps it out.
+const REPO_CRS_DIR = path.join(__dirname, "..", "vendor", "bb-crs-home", ".bb-crs");
+const REPO_CRS_G1 = path.join(REPO_CRS_DIR, "bn254_g1.dat");
+const REPO_CRS_G2 = path.join(REPO_CRS_DIR, "bn254_g2.dat");
 export const HAS_BUNDLED_CRS = fs.existsSync(REPO_CRS_G1) && fs.existsSync(REPO_CRS_G2);
-export const ENV = {
-    ...process.env,
-    PATH: process.env.PATH,
-    ...(HAS_BUNDLED_CRS
-        ? {
-            HOME: REPO_CRS_HOME,
-            // os.homedir() on Windows falls back to USERPROFILE.
-            USERPROFILE: REPO_CRS_HOME
-        }
-        : {})
-};
+export const CRS_DIR = HAS_BUNDLED_CRS ? REPO_CRS_DIR : undefined;
+// Points loaded per backend: bb.js's own default (2^19), which covers any circuit up to
+// that size and is well under the 2^20 points bundled. VCC_SRS_SIZE raises it for a larger
+// circuit.
+const SRS_POINTS = Number(process.env.VCC_SRS_SIZE) > 0 ? Number(process.env.VCC_SRS_SIZE) : 2 ** 19;
 /**
- * Resolves the bb.js executable path.
+ * A Barretenberg instance on the Wasm backend with the BN254 SRS loaded.
+ *
+ * Wasm, not bb.js's default of its bundled native binary: the native backend runs a
+ * separate bb process that does its own CRS handling and ignores crsPath, and this
+ * package's promise is that proving runs inside Node.js on any platform it does.
+ * The caller destroys it.
  */
-export function getBbJsExecutable() {
-    const possiblePaths = [
-        path.join(__dirname, "..", "node_modules", ".bin", "bb.js"),
-        path.join(__dirname, "node_modules", ".bin", "bb.js")
-    ];
-    for (const p of possiblePaths) {
-        if (fs.existsSync(p))
-            return p;
+async function newBarretenberg() {
+    const api = await Barretenberg.new({
+        backend: BackendType.Wasm,
+        skipSrsInit: true,
+        crsPath: CRS_DIR
+    });
+    try {
+        const crs = await Crs.new(SRS_POINTS, CRS_DIR);
+        const loaded = await api.srsInitSrs({
+            pointsBuf: crs.getG1Data(),
+            numPoints: crs.numPoints,
+            g2Point: crs.getG2Data()
+        });
+        // A compressed download comes back decompressed; caching it saves the next run the
+        // work. The bundled CRS is already uncompressed, so this never writes into the package.
+        if (loaded.pointsBuf.length > 0)
+            await crs.cacheUncompressed(loaded.pointsBuf);
+        return api;
     }
-    return "bb.js";
+    catch (err) {
+        await api.destroy().catch(() => { });
+        throw err;
+    }
 }
-export const BB_JS_BIN = getBbJsExecutable();
+/** A 0x-prefixed hex field element as its 32 big-endian bytes. */
+function fieldHexToBytes(hex) {
+    const clean = hex.replace(/^0x/, "").padStart(64, "0");
+    if (clean.length !== 64 || !/^[0-9a-fA-F]+$/.test(clean)) {
+        throw new Error(`public input ${hex} is not a 32-byte field element`);
+    }
+    return Uint8Array.from(Buffer.from(clean, "hex"));
+}
 /**
  * Cryptographically uniform random field element using rejection sampling.
  */
@@ -127,8 +141,8 @@ function proverVersion() {
     return cachedProverVersion;
 }
 export async function toolchainVersions() {
-    const bb_js = "0.58.0 (bb.js)";
-    const noir_js = "0.36.0 (NoirJS)";
+    const bb_js = `${BB_VERSION} (bb.js)`;
+    const noir_js = `${NOIR_VERSION} (NoirJS)`;
     const prover = proverVersion();
     return { noir_js, bb_js, prover };
 }
@@ -139,19 +153,34 @@ export function ensureHasherProject(hasherDir) {
     if (!hasherDir)
         return;
     const targetJson = path.join(hasherDir, "target", "hasher.json");
-    if (!fs.existsSync(targetJson)) {
-        fs.mkdirSync(path.join(hasherDir, "target"), { recursive: true });
-        const possibleBundled = [
-            path.join(__dirname, "..", "artifacts", "hasher.json"),
-            path.join(__dirname, "artifacts", "hasher.json"),
-            path.join(process.cwd(), "artifacts", "hasher.json")
-        ];
-        for (const src of possibleBundled) {
-            if (fs.existsSync(src)) {
-                fs.copyFileSync(src, targetJson);
-                break;
-            }
+    // Copy the bundled hasher in when there is none, and also when the one there was
+    // compiled by a Noir this build's NoirJS cannot run. An install made by an earlier
+    // release keeps that release's hasher (Noir 0.36), and NoirJS 1.0 refuses to
+    // deserialise it, so without the version check every prove after an upgrade fails.
+    if (fs.existsSync(targetJson) && hasherCompiledByCurrentNoir(targetJson))
+        return;
+    const possibleBundled = [
+        path.join(__dirname, "..", "artifacts", "hasher.json"),
+        path.join(__dirname, "artifacts", "hasher.json"),
+        path.join(process.cwd(), "artifacts", "hasher.json")
+    ];
+    for (const src of possibleBundled) {
+        if (fs.existsSync(src)) {
+            fs.mkdirSync(path.join(hasherDir, "target"), { recursive: true });
+            fs.copyFileSync(src, targetJson);
+            circuitCache.delete(targetJson);
+            break;
         }
+    }
+}
+/** Whether a compiled Noir artifact's noir_version is the Noir this build runs. */
+function hasherCompiledByCurrentNoir(artifactPath) {
+    try {
+        const v = JSON.parse(fs.readFileSync(artifactPath, "utf8")).noir_version;
+        return typeof v === "string" && v.split("+")[0] === NOIR_VERSION;
+    }
+    catch {
+        return false;
     }
 }
 // In-memory cache for loaded Noir circuit instances
@@ -169,10 +198,15 @@ function getCachedCircuit(circuitJsonPath) {
 export async function poseidon2(hasherDir, value, salt, _tag = "h") {
     let hasherJsonPath = "";
     if (hasherDir) {
-        ensureHasherProject(hasherDir);
+        try {
+            ensureHasherProject(hasherDir);
+        }
+        catch {
+            // An install dir this process cannot write to; the bundled hasher below serves.
+        }
         hasherJsonPath = path.join(hasherDir, "target", "hasher.json");
     }
-    if (!hasherJsonPath || !fs.existsSync(hasherJsonPath)) {
+    if (!hasherJsonPath || !fs.existsSync(hasherJsonPath) || !hasherCompiledByCurrentNoir(hasherJsonPath)) {
         const possibleBundled = [
             path.join(__dirname, "..", "artifacts", "hasher.json"),
             path.join(__dirname, "artifacts", "hasher.json"),
@@ -210,76 +244,71 @@ export async function poseidon2(hasherDir, value, salt, _tag = "h") {
     }
 }
 /**
- * Solves circuit constraints and generates witness in-memory via NoirJS,
- * then generates the UltraHonk proof with bb.js.
+ * Solves the circuit's witness in memory with NoirJS, then proves it with bb.js
+ * (UltraHonk, Wasm backend). Takes the circuit either as compiled JSON in hand
+ * (`circuitSource`) or from `<circuitDir>/target/<circuitName>.json`.
+ *
+ * The proof bytes returned are the circuit's public inputs followed by the proof
+ * (bb.js reconstructHonkProof). bb 6 hands the two back separately and its verifier
+ * takes them separately; the package carries them as one string so that its sha256,
+ * which the Methodology Graph uses as the voting round id, covers the public inputs
+ * (the emission factor among them) as well as the proof. Nothing in the bytes states
+ * how many public inputs lead, so verifying splits them again with that count from
+ * the recipe.
  */
-/**
- * Solves circuit constraints and generates witness in-memory via NoirJS,
- * then generates the UltraHonk proof with bb.js.
- * Supports both on-disk circuit project and in-memory circuit JSON.
- */
-export async function proveCircuitWithNoirJs(circuitDir, circuitName = "", inputsMap, tag, circuitSource) {
-    const name = `vcc_${tag}`;
-    let tmpCircuitPath = null;
-    let circuitJsonPath;
-    let witnessPath;
-    let proofPath;
-    let execCwd;
-    if (circuitSource) {
-        execCwd = os.tmpdir();
-        tmpCircuitPath = path.join(os.tmpdir(), `vcc_circuit_${tag}.json`);
-        const content = typeof circuitSource === "string" ? circuitSource : JSON.stringify(circuitSource);
-        fs.writeFileSync(tmpCircuitPath, content);
-        circuitJsonPath = tmpCircuitPath;
-        witnessPath = path.join(os.tmpdir(), `${name}.gz`);
-        proofPath = path.join(os.tmpdir(), `${name}.proof`);
+export async function proveCircuitWithNoirJs(circuitDir, circuitName = "", inputsMap, _tag, circuitSource) {
+    let circuit = circuitSource;
+    if (typeof circuit === "string") {
+        try {
+            circuit = JSON.parse(circuit);
+        }
+        catch {
+            return { ok: false, reason: "circuit source is not valid JSON" };
+        }
     }
-    else {
+    if (!circuit) {
         if (!circuitDir) {
             return { ok: false, reason: "circuitDir is required when circuitSource is not provided" };
         }
-        execCwd = circuitDir;
-        circuitJsonPath = path.join(circuitDir, "target", `${circuitName}.json`);
-        witnessPath = path.join(circuitDir, "target", `${name}.gz`);
-        proofPath = path.join(circuitDir, "target", `${name}.proof`);
-    }
-    const cleanup = () => {
-        for (const p of [witnessPath, proofPath, tmpCircuitPath]) {
-            if (p) {
-                try {
-                    if (fs.existsSync(p))
-                        fs.unlinkSync(p);
-                }
-                catch { }
-            }
+        const circuitJsonPath = path.join(circuitDir, "target", `${circuitName}.json`);
+        try {
+            circuit = getCachedCircuit(circuitJsonPath);
         }
-    };
-    // 1. Generate witness using NoirJS
+        catch (e) {
+            return { ok: false, reason: `Failed to read compiled circuit at ${circuitJsonPath}: ${e.message}` };
+        }
+    }
+    // 1. Solve the witness with NoirJS. It stays in memory: nothing private is written
+    //    to disk on the way to the proof.
+    let witness;
     try {
-        const circuit = circuitSource || getCachedCircuit(circuitJsonPath);
         const noir = new Noir(circuit);
-        const { witness } = await noir.execute(inputsMap);
-        // Write gzipped witness buffer returned by NoirJS
-        fs.writeFileSync(witnessPath, witness);
+        ({ witness } = await noir.execute(inputsMap));
     }
     catch (noirErr) {
-        cleanup();
         return { ok: false, reason: `NoirJS witness generation failed:\n${noirErr.message}` };
     }
-    // 2. Generate UltraHonk proof using bb.js
+    // 2. Prove with bb.js.
+    let api;
     try {
-        await execFileAsync(BB_JS_BIN, ["prove_ultra_honk", "-b", circuitJsonPath, "-w", witnessPath, "-o", proofPath], {
-            cwd: execCwd,
-            env: ENV,
-            maxBuffer: 64 * 1024 * 1024
+        api = await newBarretenberg();
+        const backend = new UltraHonkBackend(circuit.bytecode, api);
+        const { proof, publicInputs } = await backend.generateProof(witness, {
+            verifierTarget: VERIFIER_TARGET
         });
-        const proof = fs.readFileSync(proofPath);
-        cleanup();
-        return { ok: true, proof };
+        const inputBytes = new Uint8Array(publicInputs.length * 32);
+        publicInputs.forEach((pi, i) => inputBytes.set(fieldHexToBytes(pi), i * 32));
+        return {
+            ok: true,
+            proof: Buffer.from(reconstructHonkProof(inputBytes, proof)),
+            publicInputs: publicInputs.map((pi) => `0x${pi.replace(/^0x/, "").padStart(64, "0")}`)
+        };
     }
     catch (bbErr) {
-        cleanup();
-        return { ok: false, reason: `bb.js prove_ultra_honk failed:\n${bbErr.stderr || bbErr.message}` };
+        return { ok: false, reason: `bb.js UltraHonk proving failed:\n${bbErr?.message ?? String(bbErr)}` };
+    }
+    finally {
+        await api?.destroy().catch(() => { });
     }
 }
 /**
@@ -289,43 +318,49 @@ export async function proveCircuit(circuitDir, circuitName = "", inputsMap, tag,
     return proveCircuitWithNoirJs(circuitDir, circuitName, inputsMap, tag, circuitSource);
 }
 /**
- * Verifies an UltraHonk proof using bb.js verify_ultra_honk.
- * Accepts either a path to vk on disk or raw vk buffer in-memory.
+ * Verifies an UltraHonk proof package's bytes (public inputs followed by the proof)
+ * against a verifying key, with bb.js on the Wasm backend.
+ *
+ * `publicInputCount` is how many 32-byte fields lead the bytes; the caller takes it
+ * from the recipe's public signal order. `vk` is a path to the key on disk or its bytes.
+ * Returns the public inputs read out of the bytes alongside the verdict so the caller
+ * can compare them with what the package claims.
  */
-export async function verifyProofWithBbJs(vk, proofBytes) {
-    const tmpProofPath = path.join(os.tmpdir(), `vcc_verify_${randomBytes(8).toString("hex")}.proof`);
-    fs.writeFileSync(tmpProofPath, proofBytes);
-    let tmpVkPath = null;
-    let resolvedVkPath;
-    if (typeof vk === "string") {
-        resolvedVkPath = vk;
+export async function verifyProofWithBbJs(vk, proofBytes, publicInputCount) {
+    if (!Number.isInteger(publicInputCount) || publicInputCount < 0) {
+        return { ok: false, valid: false, detail: `invalid public input count ${publicInputCount}` };
     }
-    else {
-        tmpVkPath = path.join(os.tmpdir(), `vcc_vk_${randomBytes(8).toString("hex")}.vk`);
-        fs.writeFileSync(tmpVkPath, Buffer.from(vk));
-        resolvedVkPath = tmpVkPath;
+    if (proofBytes.length % 32 !== 0 || proofBytes.length <= publicInputCount * 32) {
+        return {
+            ok: true,
+            valid: false,
+            detail: `proof is ${proofBytes.length} bytes, which is not ${publicInputCount} public inputs ` +
+                `followed by a proof in 32-byte fields`
+        };
     }
+    let vkBytes;
     try {
-        const res = spawnSync(BB_JS_BIN, ["verify_ultra_honk", "-k", resolvedVkPath, "-p", tmpProofPath], {
-            env: ENV,
-            encoding: "utf8"
-        });
-        if (res.status === 0) {
-            return { ok: true, valid: true };
-        }
-        return { ok: true, valid: false, detail: res.stderr || res.stdout || "Verification failed" };
+        vkBytes = typeof vk === "string" ? fs.readFileSync(vk) : Uint8Array.from(vk);
     }
     catch (err) {
-        return { ok: false, valid: false, detail: err.message };
+        return { ok: false, valid: false, detail: `could not read verifying key: ${err.message}` };
+    }
+    const { publicInputs, proof } = splitHonkProof(Uint8Array.from(proofBytes), publicInputCount);
+    const publicInputsHex = deflattenFields(publicInputs).map((pi) => `0x${pi.replace(/^0x/, "").padStart(64, "0")}`);
+    let api;
+    try {
+        api = await newBarretenberg();
+        const valid = await new UltraHonkVerifierBackend(api).verifyProof({ proof, publicInputs: publicInputsHex, verificationKey: vkBytes }, { verifierTarget: VERIFIER_TARGET });
+        return valid
+            ? { ok: true, valid: true, publicInputs: publicInputsHex }
+            : { ok: true, valid: false, detail: "bb.js rejected the proof", publicInputs: publicInputsHex };
+    }
+    catch (err) {
+        // bb throws rather than returning false for some malformed proofs and keys. Either
+        // way the proof is not accepted; the message says which.
+        return { ok: true, valid: false, detail: `bb.js verifier error: ${err?.message ?? String(err)}` };
     }
     finally {
-        for (const p of [tmpProofPath, tmpVkPath]) {
-            if (p && fs.existsSync(p)) {
-                try {
-                    fs.unlinkSync(p);
-                }
-                catch { }
-            }
-        }
+        await api?.destroy().catch(() => { });
     }
 }

@@ -3,7 +3,8 @@
 This repository contains the client-side Zero-Knowledge Prover MCP server and CLI toolchain for Energy Web Verified Compute.
 
 ## Overview
-- Powered by **NoirJS** (ACVM witness generation) and **bb.js** (UltraHonk proof backend) via WebAssembly.
+- Powered by **NoirJS** 1.0.0 (ACVM witness generation) and **bb.js** 6.0.0 (`@aztec-foundation/bb.js`, UltraHonk proof backend) via WebAssembly. Recipes must pin `bb` 6.0.0 and circuits compiled with Noir 1.0.0.
+- **Proof bytes layout**: `proof_bytes_b64` is the circuit's public inputs (32 bytes each, in `public_signal_order`) followed by the proof, as bb.js `reconstructHonkProof` writes it. Verifiers split it again with `splitHonkProof` and the public signal count.
 - **Zero Native Dependencies**: Does not require `nargo` or native C++ `bb` binaries; runs portably in Node.js >= 20.
 - **Zero Knowledge Privacy Guarantee**: Private input data (e.g. meter readings) and blinding salts remain strictly local and are never leaked to external servers or tool responses.
 
@@ -23,7 +24,7 @@ This repository contains the client-side Zero-Knowledge Prover MCP server and CL
 4. **Dynamic In-Memory Proving**: Proving supports dynamic circuits via embedded base64 strings (`circuit_b64` and `vk_b64`) or files without requiring local disk compilation.
 5. **One Recipe, Nothing To Install**: A recipe from the Methodology Graph's `get_workspace_instructions` is self-contained. It carries the compiled circuit and the verifying key alongside the hashes they must match, so nothing has to be installed first, and `prove` refuses outright if the artifacts it carries do not hash to the pins beside them. Write the recipe to a file and pass `recipe_path`: it runs to tens of kilobytes and pasting it back through a message is what corrupts it.
 6. **Do Not Copy Proof Bytes Across Messages (Use Ephemeral Submission Tickets)**:
-   UltraHonk proofs are ~19KB of Base64 and contain long stretches of identical repeated characters (e.g. **5,120 consecutive `'A'` characters** from zero-padding in the UltraHonk proof format). Autoregressive LLM decoders cannot reliably emit thousands of identical characters without token counting drift, which mutates the Base64 string and fails the server's `proof_sha256` integrity check.
+   UltraHonk proofs are ~19KB of Base64 and contain long stretches of identical repeated characters (runs of hundreds of consecutive `'A'` characters from zero-valued fields; 5,120 in bb 0.58.0 proofs, several hundred in bb 6.0.0 proofs). Autoregressive LLM decoders cannot reliably emit long runs of identical characters without token counting drift, which mutates the Base64 string and fails the server's `proof_sha256` integrity check.
    - **Always keep `include_proof: false`** (the default) in `prove` and `verify`.
    - **Do NOT copy proof bytes into chat messages or inline tool calls.**
    - Request an ephemeral ticket from Methodology Graph using `request_proof_submission_ticket`.
@@ -116,9 +117,10 @@ This is the complete JSON document that `prove` writes to `~/.vcc/packages/<hash
   "proof_bytes_b64": "<base64-encoded UltraHonk proof string, ~19KB>",
   "proof_sha256": "4b68ff0cfd0bf94446b85679fdfa6f959c5d120a1f26cf9c77e7774dc594cfdc",
   "toolchain": {
-    "bb": "0.58.0",
-    "nargo": "0.36.0",
-    "poseidon": "v0.1.0"
+    "bb": "6.0.0 (bb.js)",
+    "nargo": "1.0.0 (NoirJS)",
+    "poseidon": "v0.4.0",
+    "prover": "@energyweb/vcc-prover-mcp@<version>"
   },
   "metadata": {
     "timestamp": "2026-09-15T04:12:00.000Z"
@@ -165,7 +167,7 @@ If shell execution or HTTP streaming is strictly unavailable in your execution e
 
 **Notes & Defenses for Inlined Submission**:
 - **Field Aliases**: The Methodology Graph accepts either `proof` or `proof_bytes_b64`, and accepts either top-level `formula_id`/`formula_version` or a nested `formula: { id, version }`.
-- **Repetition Drift Defense**: The Methodology Graph supports Run-Length Encoded (RLE) replacement syntax (e.g. `{5120:A}`) to safely represent the 5,120 zero-padded characters if your model context compresses repeating characters.
+- **Repetition Drift Defense**: The Methodology Graph supports Run-Length Encoded (RLE) replacement syntax (e.g. `{361:A}`) to safely represent long zero-padded runs if your model context compresses repeating characters.
 - **Handling Hash Mismatches**: If the server returns a `proof_sha256` mismatch, **do not re-prove** (which creates fresh random salts and a completely different proof). Instead, call `verify` with `include_proof: true` or read the JSON file off disk to get a clean, uncorrupted copy.
 
 ---

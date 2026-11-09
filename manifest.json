@@ -1,7 +1,7 @@
 {
   "manifest_version": "0.2",
   "name": "vcc-prover",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "display_name": "Energy Web Verified Compute Prover",
   "description": "Client-side zero-knowledge UltraHonk prover for privacy-preserving methodology compute.",
   "long_description": "TypeScript client-side zero-knowledge prover powered by NoirJS and bb.js (Wasm). Exposes status, prove, and verify tools to Claude. Runs entirely inside Node.js; private activity values and salts never leave your local machine.",
@@ -14,7 +14,9 @@
     "entry_point": "bin/vcc-prove-mcp.js",
     "mcp_config": {
       "command": "node",
-      "args": ["${__dirname}/bin/vcc-prove-mcp.js"]
+      "args": [
+        "${__dirname}/bin/vcc-prove-mcp.js"
+      ]
     }
   },
   "tools": [
@@ -32,7 +34,11 @@
     }
   ],
   "compatibility": {
-    "platforms": ["darwin", "linux", "win32"],
+    "platforms": [
+      "darwin",
+      "linux",
+      "win32"
+    ],
     "runtimes": {
       "node": ">=20"
     }
